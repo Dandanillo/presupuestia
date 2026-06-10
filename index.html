@@ -5,131 +5,263 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PresupuestIA – Abroom</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-  :root{--bg:#0f1117;--surface:#181c27;--surface2:#1e2333;--border:#2a3045;--accent:#f59e0b;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--text:#e8eaf0;--text2:#8b92a8;--text3:#5a6178;--radius:12px;--radius-sm:8px}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
-  #login-screen{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at 30% 20%,#1a2040 0%,var(--bg) 60%)}
-  .login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
-  .login-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
-  .login-logo .icon{width:44px;height:44px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
-  .login-logo span{font-size:22px;font-weight:700;letter-spacing:-.5px}
-  .login-logo small{display:block;font-size:11px;color:var(--text2);font-weight:400;letter-spacing:.5px;text-transform:uppercase}
-  .login-title{font-size:26px;font-weight:700;margin-bottom:6px;letter-spacing:-.5px}
-  .login-sub{color:var(--text2);font-size:14px;margin-bottom:32px}
-  .field{margin-bottom:16px}
-  .field label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px}
-  .field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;color:var(--text);font-family:'Inter',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
-  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
-  .field textarea{resize:vertical;min-height:120px}
-  .btn{width:100%;padding:14px;background:var(--accent);color:#0f1117;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:opacity .2s,transform .1s;letter-spacing:.2px}
-  .btn:hover{opacity:.9}.btn:active{transform:scale(.99)}.btn:disabled{opacity:.5;cursor:not-allowed}
-  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
-  .btn-green{background:var(--green);color:#fff}
-  .login-error{color:var(--red);font-size:13px;margin-top:12px;text-align:center;display:none}
-  #app-screen{display:none;flex-direction:column;flex:1}
-  header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-  .header-left{display:flex;align-items:center;gap:12px}
-  .header-logo{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
-  .header-title{font-size:16px;font-weight:700}
-  .header-user{display:flex;align-items:center;gap:10px}
-  .user-badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:13px;font-weight:500;color:var(--text2)}
-  .btn-logout{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);padding:6px 12px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
-  .btn-logout:hover{border-color:var(--red);color:var(--red)}
-  .main{flex:1;padding:32px 24px;max-width:900px;width:100%;margin:0 auto}
-  .page-title{font-size:28px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
-  .page-sub{color:var(--text2);font-size:14px;margin-bottom:32px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:20px}
-  .card-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;gap:8px}
-  .input-methods{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-  .method-btn{background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius-sm);padding:16px;cursor:pointer;transition:all .2s;text-align:center;color:var(--text2);font-family:'Inter',sans-serif;font-size:13px;font-weight:500}
-  .method-btn:hover{border-color:var(--accent);color:var(--text)}
-  .method-btn.active{border-color:var(--accent);background:rgba(245,158,11,.08);color:var(--text)}
-  .method-btn .method-icon{font-size:24px;display:block;margin-bottom:6px}
-  .upload-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:32px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
-  .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(245,158,11,.04)}
-  .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
-  .upload-icon{font-size:32px;margin-bottom:8px}
-  .upload-text{font-size:14px;color:var(--text2)}
-  .upload-text strong{color:var(--accent)}
-  .preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:16px}
-  .preview-item{aspect-ratio:1;border-radius:6px;object-fit:cover;border:1px solid var(--border)}
-  .recorder{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-  .rec-btn{width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;font-size:22px;transition:all .2s;flex-shrink:0}
-  .rec-btn.idle{background:var(--accent2)}
-  .rec-btn.recording{background:var(--red);animation:pulse 1.2s infinite}
-  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}}
-  .rec-status{font-size:14px;color:var(--text2);flex:1}
-  .rec-status strong{color:var(--text)}
-  audio{width:100%;margin-top:12px}
-  .context-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .loading-bar{background:var(--surface2);border-radius:4px;height:4px;overflow:hidden;margin-top:16px;display:none}
-  .loading-bar.active{display:block}
-  .loading-bar::after{content:'';display:block;height:100%;width:40%;background:var(--accent);border-radius:4px;animation:loading 1.5s ease-in-out infinite}
-  @keyframes loading{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
-  .loading-msg{text-align:center;color:var(--text2);font-size:14px;padding:8px 0;display:none}
-  #results-section{display:none}
-  .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px}
-  .results-actions{display:flex;gap:8px}
-  .results-actions .btn{width:auto;padding:10px 18px;font-size:13px}
-  .chapter-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
-  .chapter-header{background:var(--surface2);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
-  .chapter-name{font-weight:700;font-size:15px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
-  .chapter-total{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--accent)}
-  .subchapter-block{padding:0 20px 16px}
-  .subchapter-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:14px 0 10px;border-bottom:1px solid var(--border);margin-bottom:10px}
-  .partida-row{display:grid;grid-template-columns:80px 1fr 70px 55px 100px 110px 28px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(42,48,69,.5);font-size:13px}
-  .partida-row:last-child{border-bottom:none}
-  .partida-code{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);font-weight:500}
-  .partida-desc{color:var(--text);line-height:1.4}
-  .partida-qty{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2)}
-  .partida-unit{text-align:center;background:var(--surface2);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase}
-  .partida-price{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2)}
-  .partida-total{text-align:right;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--text)}
-  .partida-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:4px;transition:all .15s;line-height:1}
-  .partida-del:hover{color:var(--red);background:rgba(239,68,68,.1)}
-  .summary-card{background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:20px 24px;margin-top:20px;display:flex;justify-content:flex-end;gap:40px}
-  .summary-item{text-align:right}
-  .summary-label{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-  .summary-value{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700}
-  .summary-value.main{color:var(--accent);font-size:26px}
-  .copy-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:16px}
-  .copy-panel-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
-  .copy-text{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:16px;white-space:pre-wrap;max-height:300px;overflow-y:auto;margin-bottom:12px;line-height:1.6}
-  .copy-actions{display:flex;gap:8px}
-  .copy-actions .btn{width:auto;padding:10px 18px;font-size:13px}
-  .toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:12px 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none}
-  .toast.show{opacity:1}
-  .col-header{display:grid;grid-template-columns:80px 1fr 70px 55px 100px 110px 28px;gap:8px;padding:6px 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);border-bottom:1px solid var(--border);margin-bottom:4px}
-  .col-header span:nth-child(3),.col-header span:nth-child(5),.col-header span:nth-child(6){text-align:right}
-  .col-header span:nth-child(4){text-align:center}
-  @media(max-width:640px){.context-grid{grid-template-columns:1fr}.partida-row{grid-template-columns:1fr;gap:4px}.col-header{display:none}.summary-card{flex-direction:column;gap:16px}.main{padding:20px 16px}.login-box{padding:32px 24px}}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#0f1117;--surface:#181c27;--surface2:#1e2333;--border:#2a3045;
+  --accent:#f59e0b;--accent2:#3b82f6;--green:#10b981;--red:#ef4444;--purple:#8b5cf6;
+  --text:#e8eaf0;--text2:#8b92a8;--text3:#5a6178;
+  --radius:12px;--radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+/* ── SCREENS ── */
+.screen{display:none;flex:1;flex-direction:column}
+.screen.active{display:flex}
+
+/* ── LOGIN ── */
+#s-login{align-items:center;justify-content:center;padding:20px;background:radial-gradient(ellipse at 30% 20%,#1a2040 0%,var(--bg) 60%)}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.logo-icon{width:44px;height:44px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.login-logo span{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.login-logo small{display:block;font-size:11px;color:var(--text2);font-weight:400;letter-spacing:.5px;text-transform:uppercase}
+.login-title{font-size:26px;font-weight:700;margin-bottom:6px;letter-spacing:-.5px}
+.login-sub{color:var(--text2);font-size:14px;margin-bottom:32px}
+.login-error{color:var(--red);font-size:13px;margin-top:12px;text-align:center;display:none}
+
+/* ── COMMON ── */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px}
+.field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;color:var(--text);font-family:'Inter',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field textarea{resize:vertical;min-height:110px}
+.field select option{background:var(--surface)}
+.btn{width:100%;padding:13px;background:var(--accent);color:#0f1117;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:opacity .2s,transform .1s;letter-spacing:.2px}
+.btn:hover{opacity:.9}.btn:active{transform:scale(.99)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:8px 14px;font-size:13px;width:auto}
+.btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text2)}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;flex-shrink:0}
+.h-left{display:flex;align-items:center;gap:10px}
+.h-logo{width:30px;height:30px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.h-title{font-size:15px;font-weight:700}
+.h-right{display:flex;align-items:center;gap:8px}
+.badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--text2)}
+.badge.admin{border-color:var(--accent);color:var(--accent)}
+.btn-icon{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);padding:6px 10px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+.btn-logout{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text3);padding:6px 10px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
+.btn-logout:hover{border-color:var(--red);color:var(--red)}
+
+/* ── NAV ── */
+.nav-tabs{display:flex;gap:4px;padding:12px 20px 0;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;overflow-x:auto}
+.nav-tab{padding:8px 16px;font-size:13px;font-weight:600;color:var(--text3);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:'Inter',sans-serif;transition:all .2s}
+.nav-tab:hover{color:var(--text2)}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── MAIN ── */
+.main{flex:1;padding:24px 20px;max-width:960px;width:100%;margin:0 auto}
+.page-title{font-size:24px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+.page-sub{color:var(--text2);font-size:13px;margin-bottom:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* ── INPUT METHODS ── */
+.method-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.method-btn{background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius-sm);padding:14px;cursor:pointer;transition:all .2s;text-align:center;color:var(--text2);font-family:'Inter',sans-serif;font-size:12px;font-weight:600}
+.method-btn:hover{border-color:var(--accent);color:var(--text)}
+.method-btn.active{border-color:var(--accent);background:rgba(245,158,11,.08);color:var(--text)}
+.method-icon{font-size:22px;display:block;margin-bottom:5px}
+
+/* ── UPLOAD ── */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius-sm);padding:28px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.upload-zone:hover{border-color:var(--accent);background:rgba(245,158,11,.03)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.upload-icon{font-size:28px;margin-bottom:6px}
+.upload-text{font-size:13px;color:var(--text2)}
+.upload-text strong{color:var(--accent)}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;margin-top:12px}
+.preview-item{aspect-ratio:1;border-radius:6px;object-fit:cover;border:1px solid var(--border)}
+
+/* ── RECORDER ── */
+.recorder{display:flex;align-items:center;gap:14px}
+.rec-btn{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;font-size:20px;transition:all .2s;flex-shrink:0}
+.rec-btn.idle{background:var(--accent2)}
+.rec-btn.recording{background:var(--red);animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 10px rgba(239,68,68,0)}}
+.rec-status{font-size:13px;color:var(--text2)}
+.rec-status strong{color:var(--text)}
+
+/* ── CONTEXT GRID ── */
+.ctx-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ── LOADING ── */
+.loading-bar{background:var(--surface2);border-radius:4px;height:3px;overflow:hidden;margin-top:14px;display:none}
+.loading-bar.active{display:block}
+.loading-bar::after{content:'';display:block;height:100%;width:40%;background:var(--accent);border-radius:4px;animation:ld 1.5s ease-in-out infinite}
+@keyframes ld{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+.loading-msg{text-align:center;color:var(--text2);font-size:13px;padding:8px 0;display:none}
+
+/* ── RESULTS ── */
+.results-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.results-actions{display:flex;gap:8px;flex-wrap:wrap}
+.chapter-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
+.chapter-hdr{background:var(--surface2);padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.chapter-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.chapter-total{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--accent)}
+.sub-block{padding:0 18px 14px}
+.sub-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);padding:12px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.col-hdr{display:grid;grid-template-columns:72px 1fr 65px 50px 95px 100px 60px 28px;gap:6px;padding:5px 0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);border-bottom:1px solid var(--border);margin-bottom:4px}
+.col-hdr span:nth-child(3),.col-hdr span:nth-child(5),.col-hdr span:nth-child(6){text-align:right}
+.col-hdr span:nth-child(4){text-align:center}
+.partida-row{display:grid;grid-template-columns:72px 1fr 65px 50px 95px 100px 60px 28px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(42,48,69,.4);font-size:12px}
+.partida-row:last-child{border-bottom:none}
+.p-code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);font-weight:500}
+.p-desc{color:var(--text);line-height:1.4}
+.p-desc[contenteditable="true"]{background:rgba(245,158,11,.05);border-radius:4px;padding:2px 4px;outline:1px solid var(--accent)}
+.p-qty,.p-price{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)}
+.p-qty[contenteditable="true"],.p-price[contenteditable="true"]{background:rgba(245,158,11,.05);border-radius:4px;padding:2px 4px;outline:1px solid var(--accent);min-width:40px}
+.p-unit{text-align:center;background:var(--surface2);border-radius:4px;padding:2px 5px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase}
+.p-total{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--text)}
+.p-margin{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--green)}
+.p-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:3px;border-radius:4px;transition:all .15s;line-height:1}
+.p-del:hover{color:var(--red);background:rgba(239,68,68,.1)}
+
+/* ── SUMMARY ── */
+.summary-card{background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);padding:18px 22px;margin-top:16px}
+.summary-top{display:flex;justify-content:flex-end;gap:32px;margin-bottom:16px;flex-wrap:wrap}
+.summary-item{text-align:right}
+.s-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.s-value{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700}
+.s-value.main{color:var(--accent);font-size:24px}
+.margin-ctrl{display:flex;align-items:center;gap:12px;border-top:1px solid var(--border);padding-top:14px;flex-wrap:wrap}
+.margin-label{font-size:12px;color:var(--text2);flex:1}
+.margin-input{width:80px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;outline:none}
+.margin-input:focus{border-color:var(--accent)}
+
+/* ── COPY PANEL ── */
+.copy-panel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-top:14px}
+.copy-panel-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.copy-text{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;white-space:pre-wrap;max-height:260px;overflow-y:auto;margin-bottom:10px;line-height:1.6}
+.copy-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── HISTORIAL ── */
+.hist-empty{text-align:center;color:var(--text3);padding:40px 20px;font-size:14px}
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;transition:border-color .2s}
+.hist-item:hover{border-color:var(--accent)}
+.hist-info{}
+.hist-name{font-weight:600;font-size:14px;margin-bottom:3px}
+.hist-meta{font-size:12px;color:var(--text2)}
+.hist-total{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--accent);white-space:nowrap}
+.hist-actions{display:flex;gap:6px}
+
+/* ── PRECIARIO ── */
+.prec-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.prec-info{flex:1}
+.prec-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.prec-meta{font-size:11px;color:var(--text2);font-family:'JetBrains Mono',monospace}
+.prec-actions{display:flex;gap:6px}
+.tag{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase}
+
+/* ── ADMIN ── */
+.user-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.user-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--accent);flex-shrink:0}
+.user-info{flex:1}
+.user-name{font-size:14px;font-weight:600;margin-bottom:2px}
+.user-meta{font-size:12px;color:var(--text2)}
+.user-actions{display:flex;gap:6px}
+.role-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.role-admin{background:rgba(245,158,11,.15);color:var(--accent);border:1px solid rgba(245,158,11,.3)}
+.role-user{background:rgba(139,146,168,.1);color:var(--text3);border:1px solid var(--border)}
+
+/* ── AJUSTES ── */
+.settings-section{margin-bottom:24px}
+.settings-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(42,48,69,.5);gap:12px}
+.settings-row:last-child{border-bottom:none}
+.settings-row-info{flex:1}
+.settings-row-label{font-size:14px;font-weight:500;margin-bottom:2px}
+.settings-row-desc{font-size:12px;color:var(--text2)}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:420px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:13px;color:var(--text2);margin-bottom:20px}
+.modal-actions{display:flex;gap:8px;margin-top:4px}
+.modal-actions .btn{flex:1}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--green);color:#fff;padding:11px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:100;pointer-events:none;max-width:280px}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:var(--border);margin:20px 0}
+
+@media(max-width:640px){
+  .ctx-grid{grid-template-columns:1fr}
+  .col-hdr{display:none}
+  .partida-row{grid-template-columns:1fr;gap:3px}
+  .summary-top{flex-direction:column;gap:14px;align-items:flex-end}
+  .main{padding:16px}
+  .login-box{padding:32px 24px}
+  .method-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
-<div id="login-screen">
+
+<!-- LOGIN -->
+<div id="s-login" class="screen active">
   <div class="login-box">
-    <div class="login-logo"><div class="icon">🏗️</div><div><span>PresupuestIA</span><small>Abroom · Gestión de obras</small></div></div>
+    <div class="login-logo"><div class="logo-icon">🏗️</div><div><span>PresupuestIA</span><small>Abroom · Gestión de obras</small></div></div>
     <div class="login-title">Bienvenido</div>
     <div class="login-sub">Accede con tu usuario para continuar</div>
-    <div class="field"><label>Usuario</label><input type="text" id="login-user" placeholder="usuario" autocomplete="username"></div>
-    <div class="field"><label>Contraseña</label><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <div class="field"><label>Usuario</label><input type="text" id="li-user" placeholder="usuario" autocomplete="username"></div>
+    <div class="field"><label>Contraseña</label><input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn" onclick="doLogin()">Entrar</button>
-    <div class="login-error" id="login-error">Usuario o contraseña incorrectos</div>
+    <div class="login-error" id="li-err">Usuario o contraseña incorrectos</div>
   </div>
 </div>
-<div id="app-screen">
+
+<!-- APP -->
+<div id="s-app" class="screen">
   <header>
-    <div class="header-left"><div class="header-logo">🏗️</div><span class="header-title">PresupuestIA</span></div>
-    <div class="header-user"><div class="user-badge" id="user-badge">—</div><button class="btn-logout" onclick="doLogout()">Salir</button></div>
+    <div class="h-left"><div class="h-logo">🏗️</div><span class="h-title">PresupuestIA</span></div>
+    <div class="h-right">
+      <span class="badge" id="h-badge">—</span>
+      <button class="btn-icon" onclick="showTab('historial')" title="Historial">📁</button>
+      <button class="btn-icon" onclick="showTab('ajustes')" title="Ajustes">⚙️</button>
+      <button class="btn-logout" onclick="doLogout()">Salir</button>
+    </div>
   </header>
-  <div class="main">
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="tab-nuevo" onclick="showTab('nuevo')">➕ Nuevo presupuesto</button>
+    <button class="nav-tab" id="tab-historial" onclick="showTab('historial')">📁 Historial</button>
+    <button class="nav-tab" id="tab-preciario" onclick="showTab('preciario')">📦 Preciario</button>
+    <button class="nav-tab" id="tab-ajustes" onclick="showTab('ajustes')">⚙️ Ajustes</button>
+    <button class="nav-tab" id="tab-admin" onclick="showTab('admin')" style="display:none">👑 Admin</button>
+  </div>
+
+  <!-- TAB: NUEVO -->
+  <div id="tab-nuevo-content" class="main">
     <div class="page-title">Nuevo presupuesto</div>
-    <div class="page-sub">Describe la obra con audio, fotos o texto y la IA genera las partidas</div>
+    <div class="page-sub">Describe la obra con audio, fotos o texto — la IA genera las partidas</div>
+
     <div class="card">
       <div class="card-title">📋 Datos de la obra</div>
-      <div class="context-grid">
-        <div class="field"><label>Nombre / Dirección</label><input type="text" id="obra-nombre" placeholder="Ej: Terrado C/ Major 12, Barcelona"></div>
+      <div class="ctx-grid">
+        <div class="field"><label>Nombre / Dirección</label><input type="text" id="obra-nombre" placeholder="Ej: Terrado C/ Major 12, BCN"></div>
         <div class="field"><label>Tipo de obra</label>
           <select id="obra-tipo">
             <option value="">Selecciona tipo...</option>
@@ -141,90 +273,687 @@
         </div>
       </div>
     </div>
+
     <div class="card">
       <div class="card-title">📥 Describe la obra</div>
-      <div class="input-methods">
-        <button class="method-btn active" id="method-text" onclick="setMethod('text')"><span class="method-icon">✏️</span>Texto / Notas</button>
-        <button class="method-btn" id="method-audio" onclick="setMethod('audio')"><span class="method-icon">🎙️</span>Audio (voz)</button>
-        <button class="method-btn" id="method-photos" onclick="setMethod('photos')"><span class="method-icon">📸</span>Fotos de obra</button>
-        <button class="method-btn" id="method-mixed" onclick="setMethod('mixed')"><span class="method-icon">🔀</span>Todo junto</button>
+      <div class="method-grid">
+        <button class="method-btn active" id="m-text" onclick="setMethod('text')"><span class="method-icon">✏️</span>Texto / Notas</button>
+        <button class="method-btn" id="m-audio" onclick="setMethod('audio')"><span class="method-icon">🎙️</span>Audio (voz)</button>
+        <button class="method-btn" id="m-photos" onclick="setMethod('photos')"><span class="method-icon">📸</span>Fotos de obra</button>
+        <button class="method-btn" id="m-mixed" onclick="setMethod('mixed')"><span class="method-icon">🔀</span>Todo junto</button>
       </div>
-      <div id="input-text"><div class="field"><label>Descripción de trabajos</label><textarea id="text-input" placeholder="Describe los trabajos. Puedes pegar transcripción de audio, notas de visita, o escribir directamente..."></textarea></div></div>
-      <div id="input-audio" style="display:none">
-        <div class="recorder">
-          <button class="rec-btn idle" id="rec-btn" onclick="toggleRecording()">🎙️</button>
-          <div class="rec-status"><strong id="rec-label">Pulsa para grabar</strong><br><span id="rec-time"></span></div>
-        </div>
-        <audio id="audio-playback" controls style="display:none;margin-top:16px;width:100%"></audio>
-        <div class="field" style="margin-top:16px"><label>Transcripción (editable)</label><textarea id="audio-transcript" placeholder="Transcribe aquí el audio o escribe directamente..."></textarea></div>
+      <div id="i-text"><div class="field"><label>Descripción de trabajos</label><textarea id="text-input" placeholder="Describe los trabajos, pega una transcripción de audio o tus notas de visita..."></textarea></div></div>
+      <div id="i-audio" style="display:none">
+        <div class="recorder"><button class="rec-btn idle" id="rec-btn" onclick="toggleRec()">🎙️</button><div class="rec-status"><strong id="rec-label">Pulsa para grabar</strong><br><span id="rec-time" style="font-family:'JetBrains Mono',monospace;font-size:12px"></span></div></div>
+        <audio id="audio-pb" controls style="display:none;margin-top:14px;width:100%"></audio>
+        <div class="field" style="margin-top:14px"><label>Transcripción (editable)</label><textarea id="audio-transcript" placeholder="Transcribe aquí el audio o escribe directamente..."></textarea></div>
       </div>
-      <div id="input-photos" style="display:none">
-        <div class="upload-zone"><input type="file" id="photo-input" accept="image/*" multiple onchange="handlePhotos(this)"><div class="upload-icon">📸</div><div class="upload-text"><strong>Selecciona fotos</strong> o arrástralas aquí</div><div class="preview-grid" id="photo-preview"></div></div>
-        <div class="field" style="margin-top:16px"><label>Notas adicionales (opcional)</label><textarea id="photo-notes" placeholder="Contexto sobre las fotos..."></textarea></div>
+      <div id="i-photos" style="display:none">
+        <div class="upload-zone"><input type="file" id="photo-in" accept="image/*" multiple onchange="handlePhotos(this)"><div class="upload-icon">📸</div><div class="upload-text"><strong>Selecciona fotos</strong> o arrástralas aquí<br><small style="color:var(--text3)">JPG, PNG · Máx. 4 fotos</small></div><div class="preview-grid" id="photo-prev"></div></div>
+        <div class="field" style="margin-top:14px"><label>Notas adicionales</label><textarea id="photo-notes" placeholder="Contexto sobre las fotos o trabajos que no se vean..."></textarea></div>
       </div>
-      <div id="input-mixed" style="display:none">
-        <div class="upload-zone" style="margin-bottom:16px"><input type="file" id="mixed-photo-input" accept="image/*" multiple onchange="handleMixedPhotos(this)"><div class="upload-icon">📸</div><div class="upload-text"><strong>Fotos de obra</strong> (opcional)</div><div class="preview-grid" id="mixed-photo-preview"></div></div>
-        <div class="field"><label>Notas + transcripción</label><textarea id="mixed-text" placeholder="Pega transcripción del audio y tus notas..."></textarea></div>
+      <div id="i-mixed" style="display:none">
+        <div class="upload-zone" style="margin-bottom:14px"><input type="file" id="mixed-in" accept="image/*" multiple onchange="handleMixed(this)"><div class="upload-icon">📸</div><div class="upload-text"><strong>Fotos de obra</strong> (opcional)</div><div class="preview-grid" id="mixed-prev"></div></div>
+        <div class="field"><label>Notas + transcripción</label><textarea id="mixed-text" placeholder="Pega transcripción del audio y tus notas de visita..."></textarea></div>
       </div>
     </div>
+
     <div class="card">
-      <div class="card-title">⚡ Generar presupuesto</div>
-      <button class="btn" id="generate-btn" onclick="generateBudget()">Generar partidas con IA →</button>
+      <div class="card-title">⚡ Generar</div>
+      <button class="btn" id="gen-btn" onclick="generateBudget()">Generar partidas con IA →</button>
       <div class="loading-bar" id="loading-bar"></div>
-      <div class="loading-msg" id="loading-msg">⏳ Analizando y generando partidas…</div>
+      <div class="loading-msg" id="loading-msg">⏳ Analizando descripción y generando partidas…</div>
     </div>
-    <div id="results-section">
-      <div class="results-header">
-        <div class="page-title" style="font-size:22px;margin-bottom:0">Partidas generadas</div>
+
+    <div id="results-section" style="display:none">
+      <div class="results-hdr">
+        <div class="page-title" style="font-size:20px;margin-bottom:0">Partidas generadas</div>
         <div class="results-actions">
-          <button class="btn btn-secondary" onclick="resetForm()" style="width:auto;padding:10px 18px;font-size:13px">Nueva obra</button>
-          <button class="btn btn-green" onclick="showCopyPanel()" style="width:auto;padding:10px 18px;font-size:13px">📋 Copiar para Óscartec</button>
+          <button class="btn btn-sm btn-sec" onclick="resetForm()">Nueva obra</button>
+          <button class="btn btn-sm btn-purple" onclick="saveToHistory()">💾 Guardar</button>
+          <button class="btn btn-sm btn-green" onclick="showCopyPanel()">📋 Copiar para Óscartec</button>
         </div>
       </div>
       <div id="chapters-container"></div>
-      <div class="summary-card" id="summary-card"></div>
+      <div class="summary-card" id="summary-card">
+        <div class="summary-top" id="summary-top"></div>
+        <div class="margin-ctrl">
+          <div class="margin-label"><strong>Margen / beneficio</strong><br><span style="font-size:11px;color:var(--text3)">Se aplica sobre la base imponible</span></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="number" class="margin-input" id="margin-pct" value="0" min="0" max="100" oninput="updateSummary()">
+            <span style="font-size:13px;color:var(--text2)">%</span>
+          </div>
+        </div>
+      </div>
       <div class="copy-panel" id="copy-panel" style="display:none">
-        <div class="copy-panel-title">📋 Texto listo para copiar en Óscartec</div>
-        <div class="copy-text" id="copy-text-content"></div>
+        <div class="copy-panel-title">📋 Listo para copiar en Óscartec</div>
+        <div class="copy-text" id="copy-text"></div>
         <div class="copy-actions">
-          <button class="btn" onclick="copyToClipboard()">Copiar al portapapeles</button>
-          <button class="btn btn-secondary" onclick="document.getElementById('copy-panel').style.display='none'" style="width:auto">Cerrar</button>
+          <button class="btn btn-sm" onclick="copyClipboard()">Copiar al portapapeles</button>
+          <button class="btn btn-sm btn-sec" onclick="document.getElementById('copy-panel').style.display='none'">Cerrar</button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- TAB: HISTORIAL -->
+  <div id="tab-historial-content" class="main" style="display:none">
+    <div class="page-title">Historial</div>
+    <div class="page-sub">Presupuestos guardados — pulsa uno para abrirlo</div>
+    <div id="hist-list"></div>
+  </div>
+
+  <!-- TAB: PRECIARIO -->
+  <div id="tab-preciario-content" class="main" style="display:none">
+    <div class="page-title">Preciario de partidas</div>
+    <div class="page-sub">Tus partidas habituales con precios propios — la IA las usa como referencia</div>
+    <div class="card">
+      <div class="card-title">➕ Añadir partida</div>
+      <div class="ctx-grid">
+        <div class="field"><label>Descripción</label><input type="text" id="prec-desc" placeholder="Ej: Impermeabilización con lámina LBM-40"></div>
+        <div class="field"><label>Unidad</label>
+          <select id="prec-unit"><option>M2</option><option>ML</option><option>UD</option><option>H</option><option>PA</option><option>KG</option><option>M3</option></select>
+        </div>
+      </div>
+      <div class="ctx-grid">
+        <div class="field"><label>Precio unitario (€ sin IVA)</label><input type="number" id="prec-price" placeholder="0.00" step="0.01"></div>
+        <div class="field"><label>Capítulo</label>
+          <select id="prec-cap">
+            <option>DEMOLICIÓN</option><option>IMPERMEABILIZACIÓN</option><option>REVESTIMIENTOS</option>
+            <option>INSTALACIONES</option><option>CARPINTERÍA</option><option>PINTURA</option>
+            <option>JARDINERÍA</option><option>VARIOS</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-green" onclick="addPreciario()">Añadir al preciario</button>
+    </div>
+    <div id="prec-list"></div>
+  </div>
+
+  <!-- TAB: AJUSTES -->
+  <div id="tab-ajustes-content" class="main" style="display:none">
+    <div class="page-title">Ajustes</div>
+    <div class="page-sub">Configuración de tu cuenta</div>
+    <div class="card">
+      <div class="settings-section">
+        <div class="settings-title">🔐 Cambiar contraseña</div>
+        <div class="field"><label>Contraseña actual</label><input type="password" id="pass-old" placeholder="••••••••"></div>
+        <div class="field"><label>Nueva contraseña</label><input type="password" id="pass-new" placeholder="••••••••"></div>
+        <div class="field"><label>Confirmar nueva contraseña</label><input type="password" id="pass-confirm" placeholder="••••••••"></div>
+        <button class="btn btn-sm" onclick="changePassword()">Guardar contraseña</button>
+      </div>
+      <div class="divider"></div>
+      <div class="settings-section">
+        <div class="settings-title">ℹ️ Mi cuenta</div>
+        <div class="settings-row">
+          <div class="settings-row-info"><div class="settings-row-label">Usuario</div><div class="settings-row-desc" id="set-username">—</div></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-info"><div class="settings-row-label">Rol</div><div class="settings-row-desc" id="set-role">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: ADMIN -->
+  <div id="tab-admin-content" class="main" style="display:none">
+    <div class="page-title">Panel de administración</div>
+    <div class="page-sub">Gestiona los usuarios de PresupuestIA</div>
+    <div class="card">
+      <div class="card-title">➕ Nuevo usuario</div>
+      <div class="ctx-grid">
+        <div class="field"><label>Nombre de usuario</label><input type="text" id="new-user" placeholder="nombre (sin espacios)"></div>
+        <div class="field"><label>Contraseña inicial</label><input type="password" id="new-pass" placeholder="••••••••"></div>
+      </div>
+      <div class="field"><label>Rol</label>
+        <select id="new-role">
+          <option value="user">Usuario — puede crear y ver presupuestos</option>
+          <option value="admin">Admin — acceso total + gestión de usuarios</option>
+        </select>
+      </div>
+      <button class="btn btn-sm btn-green" onclick="addUser()">Crear usuario</button>
+    </div>
+    <div class="card">
+      <div class="card-title">👥 Usuarios activos</div>
+      <div id="users-list"></div>
+    </div>
+  </div>
 </div>
+
+<!-- MODAL HISTORIAL DETALLE -->
+<div class="modal-overlay" id="modal-hist">
+  <div class="modal">
+    <div class="modal-title" id="mh-title">Presupuesto</div>
+    <div class="modal-sub" id="mh-meta"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="loadFromHistory()">Cargar y editar</button>
+      <button class="btn btn-sm btn-red" onclick="deleteFromHistory()">Eliminar</button>
+      <button class="btn btn-sm btn-sec" onclick="closeModal('modal-hist')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR ELIMINAR USUARIO -->
+<div class="modal-overlay" id="modal-del-user">
+  <div class="modal">
+    <div class="modal-title">¿Eliminar usuario?</div>
+    <div class="modal-sub" id="mdu-text">Esta acción no se puede deshacer.</div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-red" onclick="confirmDeleteUser()">Eliminar</button>
+      <button class="btn btn-sm btn-sec" onclick="closeModal('modal-del-user')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
 <script>
-const USERS={'dani':'abroom2026','lourdes':'abroom2026'};
-function doLogin(){const u=document.getElementById('login-user').value.trim().toLowerCase(),p=document.getElementById('login-pass').value,e=document.getElementById('login-error');if(USERS[u]&&USERS[u]===p){e.style.display='none';document.getElementById('login-screen').style.display='none';document.getElementById('app-screen').style.display='flex';document.getElementById('user-badge').textContent=u.charAt(0).toUpperCase()+u.slice(1)}else{e.style.display='block'}}
-function doLogout(){document.getElementById('login-screen').style.display='flex';document.getElementById('app-screen').style.display='none';resetForm()}
-document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-let currentMethod='text',uploadedPhotos=[],mixedPhotos=[];
-function setMethod(m){currentMethod=m;['text','audio','photos','mixed'].forEach(x=>{document.getElementById('method-'+x).classList.toggle('active',x===m);document.getElementById('input-'+x).style.display=x===m?'block':'none'})}
-let mediaRecorder,audioChunks=[],recInterval,recSeconds=0,isRecording=false;
-async function toggleRecording(){if(!isRecording){try{const s=await navigator.mediaDevices.getUserMedia({audio:true});mediaRecorder=new MediaRecorder(s);audioChunks=[];mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);mediaRecorder.onstop=()=>{const b=new Blob(audioChunks,{type:'audio/webm'}),u=URL.createObjectURL(b),a=document.getElementById('audio-playback');a.src=u;a.style.display='block';s.getTracks().forEach(t=>t.stop())};mediaRecorder.start();isRecording=true;recSeconds=0;document.getElementById('rec-btn').className='rec-btn recording';document.getElementById('rec-btn').textContent='⏹️';document.getElementById('rec-label').textContent='Grabando...';recInterval=setInterval(()=>{recSeconds++;const m=Math.floor(recSeconds/60).toString().padStart(2,'0'),s=(recSeconds%60).toString().padStart(2,'0');document.getElementById('rec-time').textContent=m+':'+s},1000)}catch(e){showToast('No se puede acceder al micrófono',true)}}else{mediaRecorder.stop();isRecording=false;clearInterval(recInterval);document.getElementById('rec-btn').className='rec-btn idle';document.getElementById('rec-btn').textContent='🎙️';document.getElementById('rec-label').textContent='Audio grabado ✓'}}
-function handlePhotos(i){uploadedPhotos=Array.from(i.files);const p=document.getElementById('photo-preview');p.innerHTML='';uploadedPhotos.forEach(f=>{const img=document.createElement('img');img.className='preview-item';img.src=URL.createObjectURL(f);p.appendChild(img)})}
-function handleMixedPhotos(i){mixedPhotos=Array.from(i.files);const p=document.getElementById('mixed-photo-preview');p.innerHTML='';mixedPhotos.forEach(f=>{const img=document.createElement('img');img.className='preview-item';img.src=URL.createObjectURL(f);p.appendChild(img)})}
+// ══════════════════════════════════════════════
+// STORAGE — usa localStorage para persistencia
+// ══════════════════════════════════════════════
+function getDB(){
+  try{return JSON.parse(localStorage.getItem('presupuestia_db')||'null')}catch{return null}
+}
+function saveDB(db){
+  try{localStorage.setItem('presupuestia_db',JSON.stringify(db))}catch{}
+}
+function initDB(){
+  let db=getDB();
+  if(!db){
+    db={
+      users:[
+        {username:'dani',password:'abroom2026',role:'admin'},
+        {username:'lourdes',password:'abroom2026',role:'user'}
+      ],
+      history:[],
+      preciario:[]
+    };
+    saveDB(db);
+  }
+  return db;
+}
+
+let DB=initDB();
+let currentUser=null;
 let generatedData=null;
-async function generateBudget(){const nombre=document.getElementById('obra-nombre').value.trim(),tipo=document.getElementById('obra-tipo').value;let desc='';if(currentMethod==='text')desc=document.getElementById('text-input').value.trim();else if(currentMethod==='audio')desc=document.getElementById('audio-transcript').value.trim();else if(currentMethod==='photos'){desc=document.getElementById('photo-notes').value.trim();if(!desc&&uploadedPhotos.length===0){showToast('Sube al menos una foto o añade notas',true);return}if(uploadedPhotos.length>0)desc=`[${uploadedPhotos.length} fotos] ${desc}`}else if(currentMethod==='mixed'){desc=document.getElementById('mixed-text').value.trim();if(mixedPhotos.length>0)desc=`[${mixedPhotos.length} fotos] ${desc}`}
-if(!desc){showToast('Añade una descripción de la obra',true);return}
-const btn=document.getElementById('generate-btn');btn.disabled=true;btn.textContent='Generando…';document.getElementById('loading-bar').classList.add('active');document.getElementById('loading-msg').style.display='block';document.getElementById('results-section').style.display='none';
-const sys=`Eres un experto en presupuestos de reformas y construcción en España (Barcelona, 2026). Analiza la descripción y devuelve un presupuesto en JSON puro sin markdown.\nReglas: precios mercado España 2026 sin IVA, agrupa por capítulos y subcapítulos, sé específico, marca estimaciones con "(estimado)".\nFormato:\n{"obra":"","tipo":"","capitulos":[{"nombre":"","subcapitulos":[{"nombre":"","partidas":[{"codigo":"1.1.1","descripcion":"","cantidad":0,"unidad":"M2","precio_unitario":0}]}]}],"notas":""}`;
-const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc}\nGenera el presupuesto completo en JSON.`;
-try{const photos=currentMethod==='photos'?uploadedPhotos:(currentMethod==='mixed'?mixedPhotos:[]);let messages;if(photos.length>0){const ic=await Promise.all(photos.slice(0,4).map(async f=>{const b=await toBase64(f);return{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b}}}));ic.push({type:'text',text:upr});messages=[{role:'user',content:ic}]}else{messages=[{role:'user',content:upr}]}
-const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,messages})});
-const d=await r.json(),t=d.content?.map(c=>c.text||'').join('')||'',cl=t.replace(/```json|```/g,'').trim();generatedData=JSON.parse(cl);renderResults(generatedData)}catch(e){showToast('Error: '+e.message,true);console.error(e)}finally{btn.disabled=false;btn.textContent='Generar partidas con IA →';document.getElementById('loading-bar').classList.remove('active');document.getElementById('loading-msg').style.display='none'}}
-function toBase64(f){return new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)})}
-function renderResults(data){const c=document.getElementById('chapters-container');c.innerHTML='';let tot=0;(data.capitulos||[]).forEach((cap,ci)=>{let ct=0;const cd=document.createElement('div');cd.className='chapter-block';let sh='';(cap.subcapitulos||[]).forEach((sub,si)=>{let sx=`<div class="col-header"><span>Código</span><span>Descripción</span><span>Cant.</span><span>Ud</span><span>P.Unit</span><span>Total</span><span></span></div>`;(sub.partidas||[]).forEach((p,pi)=>{const t=(p.cantidad||0)*(p.precio_unitario||0);ct+=t;const id=`p_${ci}_${si}_${pi}`;sx+=`<div class="partida-row" id="${id}"><span class="partida-code">${p.codigo||''}</span><span class="partida-desc">${p.descripcion||''}</span><span class="partida-qty">${(p.cantidad||0).toLocaleString('es-ES',{maximumFractionDigits:3})}</span><span class="partida-unit">${p.unidad||''}</span><span class="partida-price">${(p.precio_unitario||0).toLocaleString('es-ES',{minimumFractionDigits:2})} €</span><span class="partida-total">${t.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span><button class="partida-del" onclick="deletePartida('${id}')">✕</button></div>`});sh+=`<div class="subchapter-block"><div class="subchapter-title">📁 ${sub.nombre||''}</div>${sx}</div>`});tot+=ct;cd.innerHTML=`<div class="chapter-header"><div class="chapter-name">📂 ${cap.nombre||''}</div><div class="chapter-total">${ct.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>${sh}`;c.appendChild(cd)});
-const iva=tot*.21,tiva=tot+iva;document.getElementById('summary-card').innerHTML=`<div class="summary-item"><div class="summary-label">Base imponible</div><div class="summary-value">${tot.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div><div class="summary-item"><div class="summary-label">IVA 21%</div><div class="summary-value">${iva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div><div class="summary-item"><div class="summary-label">Total con IVA</div><div class="summary-value main">${tiva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>`;
-if(data.notas){const n=document.createElement('div');n.style.cssText='background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:14px 18px;margin-top:12px;font-size:13px;color:var(--text2)';n.innerHTML=`<strong style="color:var(--accent)">⚠️ Notas:</strong> ${data.notas}`;document.getElementById('summary-card').after(n)}
-document.getElementById('results-section').style.display='block';document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'})}
-function deletePartida(id){const e=document.getElementById(id);if(e)e.remove()}
-function showCopyPanel(){if(!generatedData)return;let t='';(generatedData.capitulos||[]).forEach(cap=>{t+=`\n═══ ${cap.nombre} ═══\n`;(cap.subcapitulos||[]).forEach(sub=>{t+=`\n  ── ${sub.nombre} ──\n`;(sub.partidas||[]).forEach(p=>{const tot=(p.cantidad||0)*(p.precio_unitario||0);t+=`  ${p.codigo}  |  ${p.descripcion}\n         Cant: ${p.cantidad} ${p.unidad}  |  P.Unit: ${p.precio_unitario}€  |  Total: ${tot.toFixed(2)}€\n\n`})})});document.getElementById('copy-text-content').textContent=t;document.getElementById('copy-panel').style.display='block';document.getElementById('copy-panel').scrollIntoView({behavior:'smooth'})}
-function copyToClipboard(){navigator.clipboard.writeText(document.getElementById('copy-text-content').textContent).then(()=>showToast('¡Copiado al portapapeles!'))}
-function resetForm(){['obra-nombre','obra-tipo','text-input','audio-transcript','photo-notes','mixed-text'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});document.getElementById('photo-preview').innerHTML='';document.getElementById('mixed-photo-preview').innerHTML='';document.getElementById('results-section').style.display='none';document.getElementById('copy-panel').style.display='none';generatedData=null;uploadedPhotos=[];mixedPhotos=[];setMethod('text');window.scrollTo({top:0,behavior:'smooth'})}
-function showToast(msg,isErr=false){const t=document.getElementById('toast');t.textContent=msg;t.style.background=isErr?'var(--red)':'var(--green)';t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000)}
+let currentMethod='text';
+let uploadedPhotos=[],mixedPhotos=[];
+let selectedHistIdx=null;
+let userToDelete=null;
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+function doLogin(){
+  const u=document.getElementById('li-user').value.trim().toLowerCase();
+  const p=document.getElementById('li-pass').value;
+  const e=document.getElementById('li-err');
+  DB=initDB();
+  const found=DB.users.find(x=>x.username===u&&x.password===p);
+  if(found){
+    e.style.display='none';
+    currentUser=found;
+    document.getElementById('s-login').classList.remove('active');
+    document.getElementById('s-app').classList.add('active');
+    document.getElementById('h-badge').textContent=u.charAt(0).toUpperCase()+u.slice(1);
+    document.getElementById('h-badge').className='badge'+(found.role==='admin'?' admin':'');
+    document.getElementById('set-username').textContent=u;
+    document.getElementById('set-role').textContent=found.role==='admin'?'Administrador':'Usuario';
+    if(found.role==='admin'){
+      document.getElementById('tab-admin').style.display='';
+    }
+    showTab('nuevo');
+    renderPreciario();
+    renderHistory();
+  }else{
+    e.style.display='block';
+  }
+}
+function doLogout(){
+  currentUser=null;
+  document.getElementById('s-app').classList.remove('active');
+  document.getElementById('s-login').classList.add('active');
+  document.getElementById('li-user').value='';
+  document.getElementById('li-pass').value='';
+  document.getElementById('tab-admin').style.display='none';
+  resetForm();
+}
+document.getElementById('li-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function showTab(name){
+  ['nuevo','historial','preciario','ajustes','admin'].forEach(t=>{
+    const tab=document.getElementById('tab-'+t);
+    const content=document.getElementById('tab-'+t+'-content');
+    if(tab)tab.classList.toggle('active',t===name);
+    if(content)content.style.display=t===name?'block':'none';
+  });
+  if(name==='historial')renderHistory();
+  if(name==='preciario')renderPreciario();
+  if(name==='admin')renderUsers();
+}
+
+// ══════════════════════════════════════════════
+// INPUT METHODS
+// ══════════════════════════════════════════════
+function setMethod(m){
+  currentMethod=m;
+  ['text','audio','photos','mixed'].forEach(x=>{
+    document.getElementById('m-'+x).classList.toggle('active',x===m);
+    document.getElementById('i-'+x).style.display=x===m?'block':'none';
+  });
+}
+let mediaRecorder,audioChunks=[],recInterval,recSecs=0,isRec=false;
+async function toggleRec(){
+  if(!isRec){
+    try{
+      const s=await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRecorder=new MediaRecorder(s);audioChunks=[];
+      mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
+      mediaRecorder.onstop=()=>{
+        const b=new Blob(audioChunks,{type:'audio/webm'}),u=URL.createObjectURL(b);
+        const a=document.getElementById('audio-pb');a.src=u;a.style.display='block';
+        s.getTracks().forEach(t=>t.stop());
+      };
+      mediaRecorder.start();isRec=true;recSecs=0;
+      document.getElementById('rec-btn').className='rec-btn recording';
+      document.getElementById('rec-btn').textContent='⏹️';
+      document.getElementById('rec-label').textContent='Grabando...';
+      recInterval=setInterval(()=>{recSecs++;const m=Math.floor(recSecs/60).toString().padStart(2,'0'),s=(recSecs%60).toString().padStart(2,'0');document.getElementById('rec-time').textContent=m+':'+s},1000);
+    }catch{showToast('No se puede acceder al micrófono',true)}
+  }else{
+    mediaRecorder.stop();isRec=false;clearInterval(recInterval);
+    document.getElementById('rec-btn').className='rec-btn idle';
+    document.getElementById('rec-btn').textContent='🎙️';
+    document.getElementById('rec-label').textContent='Audio grabado ✓';
+  }
+}
+function handlePhotos(i){uploadedPhotos=Array.from(i.files);const p=document.getElementById('photo-prev');p.innerHTML='';uploadedPhotos.forEach(f=>{const img=document.createElement('img');img.className='preview-item';img.src=URL.createObjectURL(f);p.appendChild(img)})}
+function handleMixed(i){mixedPhotos=Array.from(i.files);const p=document.getElementById('mixed-prev');p.innerHTML='';mixedPhotos.forEach(f=>{const img=document.createElement('img');img.className='preview-item';img.src=URL.createObjectURL(f);p.appendChild(img)})}
+
+// ══════════════════════════════════════════════
+// GENERATE
+// ══════════════════════════════════════════════
+async function generateBudget(){
+  const nombre=document.getElementById('obra-nombre').value.trim();
+  const tipo=document.getElementById('obra-tipo').value;
+  let desc='';
+  if(currentMethod==='text')desc=document.getElementById('text-input').value.trim();
+  else if(currentMethod==='audio')desc=document.getElementById('audio-transcript').value.trim();
+  else if(currentMethod==='photos'){desc=document.getElementById('photo-notes').value.trim();if(!desc&&uploadedPhotos.length===0){showToast('Sube fotos o añade notas',true);return}if(uploadedPhotos.length>0)desc=`[${uploadedPhotos.length} fotos] ${desc}`}
+  else if(currentMethod==='mixed'){desc=document.getElementById('mixed-text').value.trim();if(mixedPhotos.length>0)desc=`[${mixedPhotos.length} fotos] ${desc}`}
+  if(!desc){showToast('Añade una descripción de la obra',true);return}
+
+  // Añadir preciario propio como contexto
+  const precItems=DB.preciario||[];
+  let precCtx='';
+  if(precItems.length>0){
+    precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan):\n';
+    precItems.forEach(p=>{precCtx+=`- ${p.desc} | ${p.unit} | ${p.price}€ | ${p.cap}\n`});
+  }
+
+  const btn=document.getElementById('gen-btn');
+  btn.disabled=true;btn.textContent='Generando…';
+  document.getElementById('loading-bar').classList.add('active');
+  document.getElementById('loading-msg').style.display='block';
+  document.getElementById('results-section').style.display='none';
+
+  const sys=`Eres un experto en presupuestos de reformas y construcción en España (Barcelona, 2026). Analiza la descripción y devuelve un presupuesto en JSON puro sin markdown ni texto adicional.
+Reglas: precios mercado España 2026 sin IVA, agrupa por capítulos y subcapítulos lógicos, sé específico en descripciones, marca estimaciones con "(estimado)".${precCtx}
+Formato exacto:
+{"obra":"","tipo":"","capitulos":[{"nombre":"","subcapitulos":[{"nombre":"","partidas":[{"codigo":"1.1.1","descripcion":"","cantidad":0,"unidad":"M2","precio_unitario":0}]}]}],"notas":""}`;
+
+  const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc}\nGenera el presupuesto completo en JSON.`;
+
+  try{
+    const photos=currentMethod==='photos'?uploadedPhotos:(currentMethod==='mixed'?mixedPhotos:[]);
+    let messages;
+    if(photos.length>0){
+      const ic=await Promise.all(photos.slice(0,4).map(async f=>{const b=await toB64(f);return{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b}}}));
+      ic.push({type:'text',text:upr});messages=[{role:'user',content:ic}];
+    }else{messages=[{role:'user',content:upr}]}
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,messages})});
+    const d=await r.json();
+    const t=d.content?.map(c=>c.text||'').join('')||'';
+    const cl=t.replace(/```json|```/g,'').trim();
+    generatedData=JSON.parse(cl);
+    generatedData._obra=nombre;
+    generatedData._tipo=tipo;
+    renderResults(generatedData);
+  }catch(e){showToast('Error al generar: '+e.message,true);console.error(e)}
+  finally{btn.disabled=false;btn.textContent='Generar partidas con IA →';document.getElementById('loading-bar').classList.remove('active');document.getElementById('loading-msg').style.display='none'}
+}
+function toB64(f){return new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)})}
+
+// ══════════════════════════════════════════════
+// RENDER RESULTS
+// ══════════════════════════════════════════════
+function renderResults(data){
+  const container=document.getElementById('chapters-container');container.innerHTML='';
+  let total=0;
+  (data.capitulos||[]).forEach((cap,ci)=>{
+    let ct=0;
+    const cd=document.createElement('div');cd.className='chapter-block';
+    let sh='';
+    (cap.subcapitulos||[]).forEach((sub,si)=>{
+      let sx=`<div class="col-hdr"><span>Código</span><span>Descripción</span><span>Cant.</span><span>Ud</span><span>P.Unit</span><span>Total</span><span>Margen</span><span></span></div>`;
+      (sub.partidas||[]).forEach((p,pi)=>{
+        const t=(p.cantidad||0)*(p.precio_unitario||0);ct+=t;
+        const id=`p_${ci}_${si}_${pi}`;
+        sx+=`<div class="partida-row" id="${id}" data-qty="${p.cantidad}" data-price="${p.precio_unitario}">
+          <span class="p-code">${p.codigo||''}</span>
+          <span class="p-desc" contenteditable="true" onblur="recalcRow('${id}')">${p.descripcion||''}</span>
+          <span class="p-qty" contenteditable="true" onblur="recalcRow('${id}')" data-field="qty">${p.cantidad||0}</span>
+          <span class="p-unit">${p.unidad||''}</span>
+          <span class="p-price" contenteditable="true" onblur="recalcRow('${id}')" data-field="price">${(p.precio_unitario||0).toFixed(2)}</span>
+          <span class="p-total" id="${id}-total">${t.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span>
+          <span class="p-margin" id="${id}-margin">—</span>
+          <button class="p-del" onclick="delRow('${id}')">✕</button>
+        </div>`;
+      });
+      sh+=`<div class="sub-block"><div class="sub-title">📁 ${sub.nombre||''}</div>${sx}</div>`;
+    });
+    total+=ct;
+    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${cap.nombre||''}</div><div class="chapter-total" id="ct-${ci}">${ct.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>${sh}`;
+    container.appendChild(cd);
+  });
+  generatedData._baseTotal=total;
+  document.getElementById('margin-pct').value=0;
+  updateSummary();
+  if(data.notas){const n=document.createElement('div');n.style.cssText='background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px 16px;margin-top:10px;font-size:12px;color:var(--text2)';n.innerHTML=`<strong style="color:var(--accent)">⚠️ Notas:</strong> ${data.notas}`;document.getElementById('chapters-container').after(n)}
+  document.getElementById('results-section').style.display='block';
+  document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function recalcRow(id){
+  const row=document.getElementById(id);if(!row)return;
+  const qty=parseFloat(row.querySelector('[data-field="qty"]')?.textContent)||0;
+  const price=parseFloat(row.querySelector('[data-field="price"]')?.textContent)||0;
+  const t=qty*price;
+  const totalEl=document.getElementById(id+'-total');
+  if(totalEl)totalEl.textContent=t.toLocaleString('es-ES',{minimumFractionDigits:2})+' €';
+  recalcAll();
+}
+
+function recalcAll(){
+  let total=0;
+  document.querySelectorAll('.p-total').forEach(el=>{
+    const v=parseFloat(el.textContent.replace(/[^0-9,.]/g,'').replace(',','.'))||0;
+    total+=v;
+  });
+  generatedData._baseTotal=total;
+  updateSummary();
+}
+
+function updateSummary(){
+  const base=generatedData?._baseTotal||0;
+  const marginPct=parseFloat(document.getElementById('margin-pct')?.value)||0;
+  const margin=base*(marginPct/100);
+  const baseConMargen=base+margin;
+  const iva=baseConMargen*0.21;
+  const total=baseConMargen+iva;
+
+  // Actualizar márgenes por partida
+  document.querySelectorAll('.partida-row').forEach(row=>{
+    const id=row.id;
+    const totalEl=document.getElementById(id+'-total');
+    const marginEl=document.getElementById(id+'-margin');
+    if(totalEl&&marginEl){
+      const t=parseFloat(totalEl.textContent.replace(/[^0-9,.]/g,'').replace(',','.'))||0;
+      const m=t*(marginPct/100);
+      marginEl.textContent=marginPct>0?('+'+m.toFixed(0)+' €'):'—';
+    }
+  });
+
+  document.getElementById('summary-top').innerHTML=`
+    <div class="summary-item"><div class="s-label">Base s/margen</div><div class="s-value">${base.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>
+    ${marginPct>0?`<div class="summary-item"><div class="s-label">Margen ${marginPct}%</div><div class="s-value" style="color:var(--green)">${margin.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>`:''}
+    <div class="summary-item"><div class="s-label">IVA 21%</div><div class="s-value">${iva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>
+    <div class="summary-item"><div class="s-label">Total con IVA</div><div class="s-value main">${total.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>`;
+}
+
+function delRow(id){const el=document.getElementById(id);if(el){el.remove();recalcAll()}}
+
+// ══════════════════════════════════════════════
+// COPY PANEL
+// ══════════════════════════════════════════════
+function showCopyPanel(){
+  if(!generatedData)return;
+  const margin=parseFloat(document.getElementById('margin-pct').value)||0;
+  let txt=`PRESUPUESTO: ${generatedData._obra||'Sin nombre'}\nTipo: ${generatedData._tipo||'—'}\nFecha: ${new Date().toLocaleDateString('es-ES')}\n`;
+  if(margin>0)txt+=`Margen aplicado: ${margin}%\n`;
+  txt+='\n';
+  (generatedData.capitulos||[]).forEach(cap=>{
+    txt+=`\n═══ ${cap.nombre} ═══\n`;
+    (cap.subcapitulos||[]).forEach(sub=>{
+      txt+=`\n  ── ${sub.nombre} ──\n`;
+      (sub.partidas||[]).forEach(p=>{
+        const t=(p.cantidad||0)*(p.precio_unitario||0);
+        const conMargen=t*(1+margin/100);
+        txt+=`  ${p.codigo}  |  ${p.descripcion}\n`;
+        txt+=`         Cant: ${p.cantidad} ${p.unidad}  |  P.Unit: ${p.precio_unitario}€`;
+        if(margin>0)txt+=`  |  Con margen: ${(p.precio_unitario*(1+margin/100)).toFixed(2)}€`;
+        txt+=`  |  Total: ${conMargen.toFixed(2)}€\n\n`;
+      });
+    });
+  });
+  document.getElementById('copy-text').textContent=txt;
+  document.getElementById('copy-panel').style.display='block';
+  document.getElementById('copy-panel').scrollIntoView({behavior:'smooth'});
+}
+function copyClipboard(){navigator.clipboard.writeText(document.getElementById('copy-text').textContent).then(()=>showToast('¡Copiado al portapapeles!'))}
+
+// ══════════════════════════════════════════════
+// HISTORIAL
+// ══════════════════════════════════════════════
+function saveToHistory(){
+  if(!generatedData)return;
+  DB=getDB();
+  const entry={
+    id:Date.now(),
+    fecha:new Date().toLocaleDateString('es-ES'),
+    obra:generatedData._obra||'Sin nombre',
+    tipo:generatedData._tipo||'—',
+    total:generatedData._baseTotal||0,
+    margin:parseFloat(document.getElementById('margin-pct').value)||0,
+    data:JSON.parse(JSON.stringify(generatedData)),
+    autor:currentUser.username
+  };
+  DB.history.unshift(entry);
+  if(DB.history.length>50)DB.history=DB.history.slice(0,50);
+  saveDB(DB);
+  showToast('Presupuesto guardado en historial ✓');
+}
+
+function renderHistory(){
+  DB=getDB();
+  const list=document.getElementById('hist-list');
+  if(!DB.history||DB.history.length===0){list.innerHTML='<div class="hist-empty">📭 No hay presupuestos guardados todavía</div>';return}
+  list.innerHTML=DB.history.map((h,i)=>`
+    <div class="hist-item" onclick="openHistModal(${i})">
+      <div class="hist-info">
+        <div class="hist-name">${h.obra}</div>
+        <div class="hist-meta">${h.tipo} · ${h.fecha} · ${h.autor}</div>
+      </div>
+      <div class="hist-total">${(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})} €</div>
+    </div>`).join('');
+}
+
+function openHistModal(idx){
+  selectedHistIdx=idx;
+  DB=getDB();
+  const h=DB.history[idx];
+  document.getElementById('mh-title').textContent=h.obra;
+  document.getElementById('mh-meta').textContent=`${h.tipo} · ${h.fecha} · Guardado por ${h.autor} · Total: ${(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})} €`;
+  openModal('modal-hist');
+}
+
+function loadFromHistory(){
+  if(selectedHistIdx===null)return;
+  DB=getDB();
+  const h=DB.history[selectedHistIdx];
+  generatedData=JSON.parse(JSON.stringify(h.data));
+  document.getElementById('obra-nombre').value=h.obra;
+  document.getElementById('obra-tipo').value=h.tipo||'';
+  closeModal('modal-hist');
+  showTab('nuevo');
+  renderResults(generatedData);
+  document.getElementById('margin-pct').value=h.margin||0;
+  updateSummary();
+}
+
+function deleteFromHistory(){
+  if(selectedHistIdx===null)return;
+  DB=getDB();DB.history.splice(selectedHistIdx,1);saveDB(DB);
+  closeModal('modal-hist');renderHistory();
+  showToast('Presupuesto eliminado');
+}
+
+// ══════════════════════════════════════════════
+// PRECIARIO
+// ══════════════════════════════════════════════
+function addPreciario(){
+  const desc=document.getElementById('prec-desc').value.trim();
+  const price=parseFloat(document.getElementById('prec-price').value);
+  const unit=document.getElementById('prec-unit').value;
+  const cap=document.getElementById('prec-cap').value;
+  if(!desc||!price){showToast('Rellena descripción y precio',true);return}
+  DB=getDB();
+  DB.preciario=DB.preciario||[];
+  DB.preciario.push({id:Date.now(),desc,price,unit,cap});
+  saveDB(DB);
+  document.getElementById('prec-desc').value='';
+  document.getElementById('prec-price').value='';
+  renderPreciario();
+  showToast('Partida añadida al preciario ✓');
+}
+
+function renderPreciario(){
+  DB=getDB();
+  const list=document.getElementById('prec-list');
+  if(!list)return;
+  if(!DB.preciario||DB.preciario.length===0){list.innerHTML='<div class="hist-empty">📭 El preciario está vacío. Añade tus partidas habituales.</div>';return}
+  list.innerHTML=DB.preciario.map((p,i)=>`
+    <div class="prec-item">
+      <div class="prec-info">
+        <div class="prec-name">${p.desc}</div>
+        <div class="prec-meta">${p.price.toFixed(2)} € / ${p.unit} · <span class="tag">${p.cap}</span></div>
+      </div>
+      <div class="prec-actions">
+        <button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+
+function delPreciario(i){
+  DB=getDB();DB.preciario.splice(i,1);saveDB(DB);renderPreciario();showToast('Partida eliminada');
+}
+
+// ══════════════════════════════════════════════
+// AJUSTES — CAMBIAR CONTRASEÑA
+// ══════════════════════════════════════════════
+function changePassword(){
+  const old=document.getElementById('pass-old').value;
+  const nw=document.getElementById('pass-new').value;
+  const cf=document.getElementById('pass-confirm').value;
+  if(!old||!nw||!cf){showToast('Rellena todos los campos',true);return}
+  if(nw!==cf){showToast('Las contraseñas no coinciden',true);return}
+  if(nw.length<6){showToast('Mínimo 6 caracteres',true);return}
+  DB=getDB();
+  const idx=DB.users.findIndex(u=>u.username===currentUser.username);
+  if(DB.users[idx].password!==old){showToast('Contraseña actual incorrecta',true);return}
+  DB.users[idx].password=nw;
+  currentUser.password=nw;
+  saveDB(DB);
+  document.getElementById('pass-old').value='';
+  document.getElementById('pass-new').value='';
+  document.getElementById('pass-confirm').value='';
+  showToast('Contraseña actualizada ✓');
+}
+
+// ══════════════════════════════════════════════
+// ADMIN — GESTIÓN DE USUARIOS
+// ══════════════════════════════════════════════
+function renderUsers(){
+  DB=getDB();
+  const list=document.getElementById('users-list');
+  list.innerHTML=DB.users.map((u,i)=>`
+    <div class="user-item">
+      <div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div>
+      <div class="user-info">
+        <div class="user-name">${u.username}</div>
+        <div class="user-meta">Contraseña: ${'•'.repeat(u.password.length)}</div>
+      </div>
+      <span class="role-badge role-${u.role}">${u.role==='admin'?'Admin':'Usuario'}</span>
+      <div class="user-actions">
+        ${u.username!==currentUser.username?`<button class="btn btn-sm btn-red" onclick="promptDeleteUser(${i},'${u.username}')">Eliminar</button>`:'<span style="font-size:12px;color:var(--text3)">Tú</span>'}
+      </div>
+    </div>`).join('');
+}
+
+function addUser(){
+  const username=document.getElementById('new-user').value.trim().toLowerCase();
+  const password=document.getElementById('new-pass').value;
+  const role=document.getElementById('new-role').value;
+  if(!username||!password){showToast('Rellena usuario y contraseña',true);return}
+  if(username.includes(' ')){showToast('El usuario no puede tener espacios',true);return}
+  if(password.length<6){showToast('Mínimo 6 caracteres en la contraseña',true);return}
+  DB=getDB();
+  if(DB.users.find(u=>u.username===username)){showToast('Ese usuario ya existe',true);return}
+  DB.users.push({username,password,role});
+  saveDB(DB);
+  document.getElementById('new-user').value='';
+  document.getElementById('new-pass').value='';
+  renderUsers();
+  showToast(`Usuario "${username}" creado ✓`);
+}
+
+function promptDeleteUser(idx,name){
+  userToDelete=idx;
+  document.getElementById('mdu-text').textContent=`¿Eliminar al usuario "${name}"? Esta acción no se puede deshacer.`;
+  openModal('modal-del-user');
+}
+
+function confirmDeleteUser(){
+  if(userToDelete===null)return;
+  DB=getDB();DB.users.splice(userToDelete,1);saveDB(DB);
+  userToDelete=null;closeModal('modal-del-user');renderUsers();
+  showToast('Usuario eliminado');
+}
+
+// ══════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')})});
+
+// ══════════════════════════════════════════════
+// RESET
+// ══════════════════════════════════════════════
+function resetForm(){
+  ['obra-nombre','text-input','audio-transcript','photo-notes','mixed-text'].forEach(id=>{const e=document.getElementById(id);if(e)e.value=''});
+  const ot=document.getElementById('obra-tipo');if(ot)ot.value='';
+  document.getElementById('photo-prev').innerHTML='';
+  document.getElementById('mixed-prev').innerHTML='';
+  document.getElementById('results-section').style.display='none';
+  document.getElementById('copy-panel').style.display='none';
+  generatedData=null;uploadedPhotos=[];mixedPhotos=[];
+  setMethod('text');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ══════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════
+function showToast(msg,isErr=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(isErr?' err':'');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
 </script>
 </body>
 </html>
