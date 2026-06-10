@@ -346,19 +346,24 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="card">
         <div class="card-title">📸 Fotos de la obra</div>
         <div class="media-grid">
-          <div class="media-btn">
-            <input type="file" accept="image/*" capture="environment" onchange="addPhotos(this)" multiple>
+          <div class="media-btn" onclick="openCamera('photo')">
             <span class="media-btn-icon">📷</span>
-            <span class="media-btn-label">Abrir cámara</span>
-            <span class="media-btn-sub">Haz fotos ahora</span>
+            <span class="media-btn-label">Foto</span>
+            <span class="media-btn-sub">Abre la cámara</span>
           </div>
-          <div class="media-btn">
-            <input type="file" accept="image/*" onchange="addPhotos(this)" multiple>
+          <div class="media-btn" onclick="openCamera('video')">
+            <span class="media-btn-icon">🎥</span>
+            <span class="media-btn-label">Vídeo</span>
+            <span class="media-btn-sub">Graba la obra</span>
+          </div>
+          <div class="media-btn" style="grid-column:span 2">
+            <input type="file" accept="image/*,video/*" onchange="addMedia(this)" multiple>
             <span class="media-btn-icon">🖼️</span>
             <span class="media-btn-label">Galería</span>
-            <span class="media-btn-sub">Fotos ya hechas</span>
+            <span class="media-btn-sub">Fotos y vídeos ya hechos</span>
           </div>
         </div>
+        <input type="file" id="camera-input" style="display:none" onchange="addMedia(this)">
         <div class="preview-grid" id="photo-prev"></div>
       </div>
 
@@ -737,6 +742,18 @@ async function toggleRec(){
   }
 }
 
+// ══ CAMERA ══
+function openCamera(mode){
+  const input=document.getElementById('camera-input');
+  if(mode==='photo'){input.accept='image/*';input.capture='environment'}
+  else{input.accept='video/*';input.capture='environment'}
+  input.click();
+}
+function addMedia(input){
+  const newFiles=Array.from(input.files);
+  uploadedPhotos=[...uploadedPhotos,...newFiles].slice(0,8);
+  renderPhotoPreviews();input.value='';
+}
 // ══ PHOTOS ══
 function addPhotos(input){
   const newFiles=Array.from(input.files);
@@ -746,8 +763,19 @@ function addPhotos(input){
 }
 function renderPhotoPreviews(){
   const prev=document.getElementById('photo-prev');
-  prev.innerHTML=uploadedPhotos.map((_,i)=>`<div class="preview-wrap"><img class="preview-img" id="prev-img-${i}" src=""><button class="preview-del" onclick="removePhoto(${i})">✕</button></div>`).join('');
-  uploadedPhotos.forEach((f,i)=>{const r=new FileReader();r.onload=e=>{ const el=document.getElementById('prev-img-'+i); if(el)el.src=e.target.result};r.readAsDataURL(f)});
+  prev.innerHTML=uploadedPhotos.map((f,i)=>{
+    const isVideo=f.type.startsWith('video/');
+    return`<div class="preview-wrap">
+      ${isVideo
+        ?`<div class="preview-img" style="display:flex;align-items:center;justify-content:center;background:var(--surface2);border-radius:8px;font-size:28px">🎥</div>`
+        :`<img class="preview-img" id="prev-img-${i}" src="">`}
+      <button class="preview-del" onclick="removePhoto(${i})">✕</button>
+    </div>`}).join('');
+  uploadedPhotos.forEach((f,i)=>{
+    if(!f.type.startsWith('video/')){
+      const r=new FileReader();r.onload=e=>{const el=document.getElementById('prev-img-'+i);if(el)el.src=e.target.result};r.readAsDataURL(f);
+    }
+  });
 }
 function removePhoto(i){uploadedPhotos.splice(i,1);renderPhotoPreviews()}
 
