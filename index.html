@@ -196,7 +196,7 @@
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const USERS={'dani':'abroom2026','oscar':'abroom2026'};
+const USERS={'dani':'abroom2026','lourdes':'abroom2026'};
 function doLogin(){const u=document.getElementById('login-user').value.trim().toLowerCase(),p=document.getElementById('login-pass').value,e=document.getElementById('login-error');if(USERS[u]&&USERS[u]===p){e.style.display='none';document.getElementById('login-screen').style.display='none';document.getElementById('app-screen').style.display='flex';document.getElementById('user-badge').textContent=u.charAt(0).toUpperCase()+u.slice(1)}else{e.style.display='block'}}
 function doLogout(){document.getElementById('login-screen').style.display='flex';document.getElementById('app-screen').style.display='none';resetForm()}
 document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
