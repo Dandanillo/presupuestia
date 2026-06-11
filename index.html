@@ -274,7 +274,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="field"><label>Contraseña</label>
       <div style="position:relative">
         <input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password" style="padding-right:48px">
-        <button onclick="togglePass('li-pass','eye-login')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-login">👁️</button>
+        <button onclick="togglePass('li-pass','eye-login')" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:20px;line-height:1;color:#8b92a8" id="eye-login">👁</button>
       </div>
     </div>
     <button class="btn" onclick="doLogin()">Entrar →</button>
@@ -391,15 +391,12 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <div id="input-audio-section">
           <div class="recorder-card">
             <button class="rec-circle idle" id="rec-btn" onclick="toggleRec()">🎙️</button>
-            <div class="rec-label" id="rec-label">Pulsa para grabar</div>
-            <div class="rec-time" id="rec-time"></div>
-            <audio id="audio-pb" controls style="display:none"></audio>
-            <button class="btn btn-green" id="transcribe-btn" onclick="transcribeAudio()" style="display:none;margin-top:12px">✨ Transcribir audio con IA</button>
-            <div id="transcribe-loading" style="display:none;text-align:center;color:var(--text2);font-size:13px;padding:10px">⏳ Transcribiendo…</div>
+            <div class="rec-label" id="rec-label">Pulsa para grabar y habla</div>
+            <div class="rec-time" id="rec-time" style="color:var(--green);font-size:13px;margin-top:4px"></div>
           </div>
           <div class="field" style="margin-top:12px">
-            <label>Transcripción (editable)</label>
-            <textarea id="audio-transcript" placeholder="Graba un audio y pulsa 'Transcribir' — o escribe directamente aquí..."></textarea>
+            <label>Transcripción en tiempo real</label>
+            <textarea id="audio-transcript" placeholder="Pulsa el micrófono y habla — el texto aparecerá aquí automáticamente mientras describes la obra..."></textarea>
           </div>
         </div>
 
@@ -737,67 +734,90 @@ function setInputMode(m){
   document.getElementById('input-text-section').style.display=m==='text'?'block':'none';
 }
 
-// ══ RECORDER ══
-let mediaRecorder,audioChunks=[],recInterval,recSecs=0,isRec=false;
-async function toggleRec(){
+// ══ RECORDER — Web Speech API (transcripción en tiempo real) ══
+let recognition=null,isRec=false,recInterval,recSecs=0;
+
+function toggleRec(){
   if(!isRec){
-    try{
-      const s=await navigator.mediaDevices.getUserMedia({audio:true});
-      mediaRecorder=new MediaRecorder(s);audioChunks=[];
-      mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
-      mediaRecorder.onstop=()=>{const b=new Blob(audioChunks,{type:'audio/webm'}),u=URL.createObjectURL(b);const a=document.getElementById('audio-pb');a.src=u;a.style.display='block';s.getTracks().forEach(t=>t.stop())};
-      mediaRecorder.start();isRec=true;recSecs=0;
-      document.getElementById('rec-btn').className='rec-circle recording';
-      document.getElementById('rec-btn').textContent='⏹️';
-      document.getElementById('rec-label').textContent='Grabando… pulsa para parar';
-      recInterval=setInterval(()=>{recSecs++;const m=Math.floor(recSecs/60).toString().padStart(2,'0'),s=(recSecs%60).toString().padStart(2,'0');document.getElementById('rec-time').textContent=m+':'+s},1000);
-    }catch{showToast('No se puede acceder al micrófono',true)}
+    startRecognition();
   }else{
-    mediaRecorder.stop();isRec=false;clearInterval(recInterval);
-    document.getElementById('rec-btn').className='rec-circle idle';
-    document.getElementById('rec-btn').textContent='🎙️';
-    document.getElementById('rec-label').textContent='Audio grabado ✓ Pulsa para volver a grabar';
-    document.getElementById('rec-time').textContent='';
-    document.getElementById('transcribe-btn').style.display='flex';
+    stopRecognition();
   }
 }
 
-async function transcribeAudio(){
-  if(audioChunks.length===0){showToast('Primero graba un audio',true);return}
-  document.getElementById('transcribe-btn').style.display='none';
-  document.getElementById('transcribe-loading').style.display='block';
-  try{
-    const blob=new Blob(audioChunks,{type:'audio/webm'});
-    const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(blob)});
-    const response=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        messages:[{role:'user',content:[
-          {type:'text',text:'Transcribe exactamente lo que se dice en este audio. Devuelve solo la transcripción, sin comentarios ni explicaciones. El audio es en español y describe trabajos de construcción o reforma.'},
-          {type:'document',source:{type:'base64',media_type:'audio/webm',data:b64}}
-        ]}]
-      })
-    });
-    const data=await response.json();
-    const text=data.content?.map(c=>c.text||'').join('')||'';
-    if(text){
-      document.getElementById('audio-transcript').value=text;
-      showToast('✅ Audio transcrito');
-    }else{
-      showToast('No se pudo transcribir. Escribe manualmente.',true);
-      document.getElementById('transcribe-btn').style.display='flex';
-    }
-  }catch(e){
-    showToast('Error al transcribir',true);
-    document.getElementById('transcribe-btn').style.display='flex';
-    console.error(e);
-  }finally{
-    document.getElementById('transcribe-loading').style.display='none';
+function startRecognition(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){
+    showToast('Tu navegador no soporta reconocimiento de voz. Usa Chrome.',true);
+    return;
   }
+  recognition=new SpeechRecognition();
+  recognition.lang='es-ES';
+  recognition.continuous=true;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=1;
+
+  let finalText=document.getElementById('audio-transcript').value;
+  let interimText='';
+
+  recognition.onstart=()=>{
+    isRec=true;recSecs=0;
+    document.getElementById('rec-btn').className='rec-circle recording';
+    document.getElementById('rec-btn').textContent='⏹️';
+    document.getElementById('rec-label').textContent='Grabando… habla ahora';
+    recInterval=setInterval(()=>{
+      recSecs++;
+      const m=Math.floor(recSecs/60).toString().padStart(2,'0');
+      const s=(recSecs%60).toString().padStart(2,'0');
+      document.getElementById('rec-time').textContent='🔴 '+m+':'+s;
+    },1000);
+  };
+
+  recognition.onresult=(e)=>{
+    interimText='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        finalText+=e.results[i][0].transcript+' ';
+      }else{
+        interimText+=e.results[i][0].transcript;
+      }
+    }
+    document.getElementById('audio-transcript').value=finalText+(interimText?'['+interimText+']':'');
+  };
+
+  recognition.onerror=(e)=>{
+    if(e.error!=='aborted'){showToast('Error de micrófono: '+e.error,true)}
+    stopRecognition();
+  };
+
+  recognition.onend=()=>{
+    // Clean interim brackets
+    const ta=document.getElementById('audio-transcript');
+    ta.value=ta.value.replace(/\[.*?\]/g,'').trim();
+    if(isRec){
+      // Restart automatically if still recording (Chrome stops after silence)
+      try{recognition.start()}catch{}
+    }
+  };
+
+  try{recognition.start()}catch(e){showToast('No se puede acceder al micrófono',true)}
 }
+
+function stopRecognition(){
+  isRec=false;
+  clearInterval(recInterval);
+  if(recognition){try{recognition.stop()}catch{}}
+  document.getElementById('rec-btn').className='rec-circle idle';
+  document.getElementById('rec-btn').textContent='🎙️';
+  document.getElementById('rec-label').textContent='Pulsa para grabar y habla';
+  document.getElementById('rec-time').textContent='';
+  // Clean up interim text
+  const ta=document.getElementById('audio-transcript');
+  ta.value=ta.value.replace(/\[.*?\]/g,'').trim();
+  if(ta.value){showToast('✅ Transcripción completada')}
+}
+
+
 
 // ══ CAMERA ══
 function openCamera(mode){
