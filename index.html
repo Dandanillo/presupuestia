@@ -271,7 +271,12 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="login-title">Bienvenido 👋</div>
     <div class="login-sub">Entra con tu usuario para empezar</div>
     <div class="field"><label>Usuario</label><input type="text" id="li-user" placeholder="tu usuario" autocomplete="username" autocorrect="off" autocapitalize="none"></div>
-    <div class="field"><label>Contraseña</label><input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <div class="field"><label>Contraseña</label>
+      <div style="position:relative">
+        <input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password" style="padding-right:48px">
+        <button onclick="togglePass('li-pass','eye-login')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-login">👁️</button>
+      </div>
+    </div>
     <button class="btn" onclick="doLogin()">Entrar →</button>
     <div class="login-error" id="li-err">❌ Usuario o contraseña incorrectos</div>
   </div>
@@ -513,9 +518,15 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="set-title">Cambiar contraseña</div>
     <div class="set-row">
       <div class="set-row-desc">Actualiza tu contraseña de acceso</div>
-      <div class="field"><label>Contraseña actual</label><input type="password" id="pass-old" placeholder="••••••••"></div>
-      <div class="field"><label>Nueva contraseña</label><input type="password" id="pass-new" placeholder="••••••••"></div>
-      <div class="field"><label>Confirmar</label><input type="password" id="pass-confirm" placeholder="••••••••"></div>
+      <div class="field"><label>Contraseña actual</label>
+        <div style="position:relative"><input type="password" id="pass-old" placeholder="••••••••" style="padding-right:48px"><button onclick="togglePass('pass-old','eye-old')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-old">👁️</button></div>
+      </div>
+      <div class="field"><label>Nueva contraseña</label>
+        <div style="position:relative"><input type="password" id="pass-new" placeholder="••••••••" style="padding-right:48px"><button onclick="togglePass('pass-new','eye-new')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-new">👁️</button></div>
+      </div>
+      <div class="field"><label>Confirmar</label>
+        <div style="position:relative"><input type="password" id="pass-confirm" placeholder="••••••••" style="padding-right:48px"><button onclick="togglePass('pass-confirm','eye-confirm')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-confirm">👁️</button></div>
+      </div>
       <button class="btn" onclick="changePassword()">Guardar contraseña</button>
     </div>
     <div id="admin-section" style="display:none">
@@ -627,7 +638,13 @@ function getDB(){try{return JSON.parse(localStorage.getItem('pia_db')||'null')}c
 function saveDB(db){try{localStorage.setItem('pia_db',JSON.stringify(db))}catch{}}
 function initDB(){
   let db=getDB();
-  if(!db){db={users:[{username:'dani',password:'abroom2026',role:'admin'},{username:'lourdes',password:'abroom2026',role:'user'}],history:[],preciario:[]};saveDB(db)}
+  if(!db||!db.users||db.users.length===0){
+    db=db||{};
+    db.users=db.users&&db.users.length>0?db.users:[{username:'dani',password:'abroom2026',role:'admin'},{username:'lourdes',password:'abroom2026',role:'user'}];
+    db.history=db.history||[];
+    db.preciario=db.preciario||[];
+    saveDB(db);
+  }
   return db;
 }
 let DB=initDB(),currentUser=null,generatedData=null,uploadedPhotos=[],mediciones=[],selectedHistIdx=null,userToDelete=null,currentInputMode='audio';
@@ -1115,6 +1132,14 @@ function resetForm(){
   document.getElementById('results-section').style.display='none';
   document.getElementById('step-indicator').style.display='flex';
   goStep(1);
+}
+
+// ══ TOGGLE PASSWORD ══
+function togglePass(inputId, btnId){
+  const input=document.getElementById(inputId);
+  const btn=document.getElementById(btnId);
+  if(input.type==='password'){input.type='text';btn.textContent='🙈'}
+  else{input.type='password';btn.textContent='👁️'}
 }
 
 // ══ TOAST ══
