@@ -393,6 +393,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
             <button class="rec-circle idle" id="rec-btn" onclick="toggleRec()">🎙️</button>
             <div class="rec-label" id="rec-label">Pulsa para grabar y habla</div>
             <div class="rec-time" id="rec-time" style="color:var(--green);font-size:13px;margin-top:4px"></div>
+            <button id="rec-clear-btn" onclick="clearTranscript()" style="display:none;margin-top:12px;background:none;border:1.5px solid var(--red);border-radius:8px;color:var(--red);padding:8px 16px;font-family:Inter,sans-serif;font-size:13px;font-weight:600;cursor:pointer;width:100%;justify-content:center;gap:6px;align-items:center">🗑️ Borrar y repetir</button>
           </div>
           <div class="field" style="margin-top:12px">
             <label>Transcripción en tiempo real</label>
@@ -747,56 +748,55 @@ function toggleRec(){
 
 function startRecognition(){
   const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SpeechRecognition){
-    showToast('Tu navegador no soporta reconocimiento de voz. Usa Chrome.',true);
-    return;
-  }
+  if(!SpeechRecognition){showToast('Usa Chrome para grabar voz',true);return}
   recognition=new SpeechRecognition();
   recognition.lang='es-ES';
-  recognition.continuous=true;
+  recognition.continuous=false;
   recognition.interimResults=true;
   recognition.maxAlternatives=1;
 
   let finalText=document.getElementById('audio-transcript').value;
-  let interimText='';
+  let silenceTimer=null;
 
   recognition.onstart=()=>{
     isRec=true;recSecs=0;
     document.getElementById('rec-btn').className='rec-circle recording';
     document.getElementById('rec-btn').textContent='⏹️';
     document.getElementById('rec-label').textContent='Grabando… habla ahora';
+    document.getElementById('rec-clear-btn').style.display='none';
     recInterval=setInterval(()=>{
       recSecs++;
       const m=Math.floor(recSecs/60).toString().padStart(2,'0');
       const s=(recSecs%60).toString().padStart(2,'0');
       document.getElementById('rec-time').textContent='🔴 '+m+':'+s;
     },1000);
+    // Auto-stop after 60 seconds max
+    silenceTimer=setTimeout(()=>stopRecognition(),60000);
   };
 
   recognition.onresult=(e)=>{
-    interimText='';
+    let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal){
-        finalText+=e.results[i][0].transcript+' ';
-      }else{
-        interimText+=e.results[i][0].transcript;
-      }
+      if(e.results[i].isFinal){finalText+=e.results[i][0].transcript+' ';}
+      else{interim+=e.results[i][0].transcript}
     }
-    document.getElementById('audio-transcript').value=finalText+(interimText?'['+interimText+']':'');
+    document.getElementById('audio-transcript').value=finalText+(interim?interim:'');
   };
 
   recognition.onerror=(e)=>{
-    if(e.error!=='aborted'){showToast('Error de micrófono: '+e.error,true)}
+    if(e.error!=='aborted'&&e.error!=='no-speech'){showToast('Error: '+e.error,true)}
     stopRecognition();
   };
 
   recognition.onend=()=>{
-    // Clean interim brackets
+    clearTimeout(silenceTimer);
     const ta=document.getElementById('audio-transcript');
-    ta.value=ta.value.replace(/\[.*?\]/g,'').trim();
+    ta.value=finalText.trim();
     if(isRec){
-      // Restart automatically if still recording (Chrome stops after silence)
-      try{recognition.start()}catch{}
+      // Chrome stops on silence — restart to keep recording
+      try{recognition.start()}catch{stopRecognition()}
+    }else{
+      stopRecognition();
     }
   };
 
@@ -806,15 +806,26 @@ function startRecognition(){
 function stopRecognition(){
   isRec=false;
   clearInterval(recInterval);
-  if(recognition){try{recognition.stop()}catch{}}
+  if(recognition){try{recognition.abort()}catch{}}
   document.getElementById('rec-btn').className='rec-circle idle';
   document.getElementById('rec-btn').textContent='🎙️';
-  document.getElementById('rec-label').textContent='Pulsa para grabar y habla';
   document.getElementById('rec-time').textContent='';
-  // Clean up interim text
   const ta=document.getElementById('audio-transcript');
-  ta.value=ta.value.replace(/\[.*?\]/g,'').trim();
-  if(ta.value){showToast('✅ Transcripción completada')}
+  ta.value=ta.value.trim();
+  if(ta.value){
+    document.getElementById('rec-label').textContent='✅ Grabación completada';
+    document.getElementById('rec-clear-btn').style.display='flex';
+    showToast('✅ Transcripción lista');
+  }else{
+    document.getElementById('rec-label').textContent='Pulsa para grabar y habla';
+  }
+}
+
+function clearTranscript(){
+  document.getElementById('audio-transcript').value='';
+  document.getElementById('rec-label').textContent='Pulsa para grabar y habla';
+  document.getElementById('rec-clear-btn').style.display='none';
+  showToast('Transcripción borrada');
 }
 
 
@@ -910,10 +921,15 @@ Formato:
 
   try{
     let messages;
-    if(uploadedPhotos.length>0){
-      const ic=await Promise.all(uploadedPhotos.slice(0,4).map(async f=>{const b=await toB64(f);return{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b}}}));
-      ic.push({type:'text',text:upr});messages=[{role:'user',content:ic}];
-    }else{messages=[{role:'user',content:upr}]}
+    // Solo fotos — los vídeos no se pueden enviar a la IA directamente
+    const soloFotos=uploadedPhotos.filter(f=>f.type.startsWith('image/'));
+    const tieneVideo=uploadedPhotos.some(f=>f.type.startsWith('video/'));
+    let videoNote=tieneVideo?'\n[El usuario también grabó vídeo de la obra — tenlo en cuenta para inferir más contexto]':'';
+
+    if(soloFotos.length>0){
+      const ic=await Promise.all(soloFotos.slice(0,4).map(async f=>{const b=await toB64(f);return{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b}}}));
+      ic.push({type:'text',text:upr+videoNote});messages=[{role:'user',content:ic}];
+    }else{messages=[{role:'user',content:upr+videoNote}]}
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,messages})});
     const d=await r.json();
     const t=d.content?.map(c=>c.text||'').join('')||'';
