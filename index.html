@@ -944,7 +944,9 @@ Formato:
     renderResults(generatedData);
   }catch(e){
     document.getElementById('loading-overlay').classList.remove('active');
-    showToast('Error al generar. Inténtalo de nuevo.',true);console.error(e);
+    showToast('Error: '+e.message,true);
+    alert('Error detallado:\n'+e.message+'\n\n'+e.stack);
+    console.error(e);
   }
 }
 function toB64(f){return new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)})}
