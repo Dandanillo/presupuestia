@@ -268,8 +268,8 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <small>Abroom · Gestión de obras</small>
       </div>
     </div>
-    <div class="login-title">Bienvenido 👋</div>
-    <div class="login-sub">Entra con tu usuario para empezar</div>
+    <div class="login-title" id="login-title">Bienvenido 👋</div>
+    <div class="login-sub" id="login-sub">Entra con tu usuario para empezar</div>
     <div class="field"><label>Usuario</label><input type="text" id="li-user" placeholder="tu usuario" autocomplete="username" autocorrect="off" autocapitalize="none"></div>
     <div class="field"><label>Contraseña</label>
       <div style="position:relative">
@@ -277,7 +277,10 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button onclick="togglePass('li-pass','eye-login')" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:20px;line-height:1;color:#8b92a8" id="eye-login">👁</button>
       </div>
     </div>
-    <button class="btn" onclick="doLogin()">Entrar →</button>
+    <div class="field" id="li-confirm-wrap" style="display:none"><label>Repite la contraseña</label>
+      <input type="password" id="li-confirm" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <button class="btn" id="li-btn" onclick="doLogin()">Entrar →</button>
     <div class="login-error" id="li-err">❌ Usuario o contraseña incorrectos</div>
   </div>
 </div>
@@ -546,7 +549,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="card">
       <div class="card-title">➕ Nuevo usuario</div>
       <div class="field"><label>Nombre de usuario</label><input type="text" id="new-user" placeholder="sin espacios" autocorrect="off" autocapitalize="none"></div>
-      <div class="field"><label>Contraseña inicial</label><input type="password" id="new-pass" placeholder="mínimo 6 caracteres"></div>
+      <div class="field"><label>Contraseña inicial</label><input type="password" id="new-pass" placeholder="mínimo 8 caracteres"></div>
       <div class="field"><label>Rol</label>
         <select id="new-role">
           <option value="user">Usuario — crea y consulta presupuestos</option>
@@ -635,45 +638,90 @@ audio{width:100%;margin-top:14px;border-radius:8px}
 function getDB(){try{return JSON.parse(localStorage.getItem('pia_db')||'null')}catch{return null}}
 function saveDB(db){try{localStorage.setItem('pia_db',JSON.stringify(db))}catch{}}
 function initDB(){
-  let db=getDB();
-  if(!db||!db.users||db.users.length===0){
-    db=db||{};
-    db.users=db.users&&db.users.length>0?db.users:[{username:'dani',password:'abroom2026',role:'admin'},{username:'lourdes',password:'abroom2026',role:'user'}];
-    db.history=db.history||[];
-    db.preciario=db.preciario||[];
-    saveDB(db);
-  }
+  const db=getDB()||{};
+  db.history=db.history||[];
+  db.preciario=db.preciario||[];
+  // Las cuentas antiguas guardaban la contraseña en texto plano: se eliminan.
+  // Solo se conservan las cuentas con contraseña protegida (hash + salt).
+  db.users=(db.users||[]).filter(u=>u.hash&&u.salt);
+  saveDB(db);
   return db;
 }
+
+// ══ CONTRASEÑAS PROTEGIDAS (nunca se guarda la contraseña en claro) ══
+function toB64Str(buf){return btoa(String.fromCharCode(...new Uint8Array(buf)))}
+function fromB64Str(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}
+async function hashPass(pass,saltB64){
+  const salt=saltB64?fromB64Str(saltB64):crypto.getRandomValues(new Uint8Array(16));
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},key,256);
+  return{salt:toB64Str(salt),hash:toB64Str(bits)};
+}
+function validUsername(u){return /^[a-z0-9_.-]{3,20}$/.test(u)}
 let DB=initDB(),currentUser=null,generatedData=null,uploadedPhotos=[],mediciones=[],selectedHistIdx=null,userToDelete=null,currentInputMode='audio';
 
 // ══ AUTH ══
-function doLogin(){
+function refreshLoginMode(){
+  DB=initDB();
+  const primeraVez=DB.users.length===0;
+  document.getElementById('login-title').textContent=primeraVez?'Crea tu cuenta 👋':'Bienvenido 👋';
+  document.getElementById('login-sub').textContent=primeraVez?'Primera vez: elige tu usuario y una contraseña nueva. Esta cuenta será la de administrador.':'Entra con tu usuario para empezar';
+  document.getElementById('li-confirm-wrap').style.display=primeraVez?'block':'none';
+  document.getElementById('li-btn').textContent=primeraVez?'Crear cuenta →':'Entrar →';
+  document.getElementById('li-pass').autocomplete=primeraVez?'new-password':'current-password';
+  document.getElementById('li-err').style.display='none';
+}
+function showLoginError(msg){
+  const e=document.getElementById('li-err');
+  e.textContent='❌ '+msg;e.style.display='block';
+}
+async function doLogin(){
   const u=document.getElementById('li-user').value.trim().toLowerCase();
   const p=document.getElementById('li-pass').value;
   DB=initDB();
-  const found=DB.users.find(x=>x.username===u&&x.password===p);
+  if(DB.users.length===0){
+    // Primera vez: se crea la cuenta de administrador
+    const c=document.getElementById('li-confirm').value;
+    if(!validUsername(u)){showLoginError('Usuario: de 3 a 20 letras, números, punto, guion o guion bajo');return}
+    if(p.length<8){showLoginError('La contraseña necesita al menos 8 caracteres');return}
+    if(p!==c){showLoginError('Las contraseñas no coinciden');return}
+    const h=await hashPass(p);
+    const nuevo={username:u,salt:h.salt,hash:h.hash,role:'admin'};
+    DB.users.push(nuevo);saveDB(DB);
+    enterApp(nuevo);
+    return;
+  }
+  const found=DB.users.find(x=>x.username===u);
   if(found){
-    document.getElementById('li-err').style.display='none';
-    currentUser=found;
-    document.getElementById('s-login').classList.remove('active');
-    document.getElementById('s-app').classList.add('active');
-    document.getElementById('h-badge').textContent=u.charAt(0).toUpperCase()+u.slice(1);
-    document.getElementById('h-badge').className='badge'+(found.role==='admin'?' admin':'');
-    document.getElementById('set-username').textContent=u;
-    document.getElementById('set-role').textContent=found.role==='admin'?'Administrador':'Usuario';
-    if(found.role==='admin'){document.getElementById('admin-section').style.display='block'}
-    showTab('nuevo');
-  }else{document.getElementById('li-err').style.display='block'}
+    const h=await hashPass(p,found.salt);
+    if(h.hash===found.hash){enterApp(found);return}
+  }
+  showLoginError('Usuario o contraseña incorrectos');
+}
+function enterApp(found){
+  const u=found.username;
+  document.getElementById('li-err').style.display='none';
+  document.getElementById('li-pass').value='';document.getElementById('li-confirm').value='';
+  currentUser=found;
+  document.getElementById('s-login').classList.remove('active');
+  document.getElementById('s-app').classList.add('active');
+  document.getElementById('h-badge').textContent=u.charAt(0).toUpperCase()+u.slice(1);
+  document.getElementById('h-badge').className='badge'+(found.role==='admin'?' admin':'');
+  document.getElementById('set-username').textContent=u;
+  document.getElementById('set-role').textContent=found.role==='admin'?'Administrador':'Usuario';
+  document.getElementById('admin-section').style.display=found.role==='admin'?'block':'none';
+  showTab('nuevo');
 }
 function doLogout(){
   currentUser=null;
   document.getElementById('s-app').classList.remove('active');
   document.getElementById('s-login').classList.add('active');
-  document.getElementById('li-user').value='';document.getElementById('li-pass').value='';
+  document.getElementById('li-user').value='';document.getElementById('li-pass').value='';document.getElementById('li-confirm').value='';
   resetForm();
+  refreshLoginMode();
 }
 document.getElementById('li-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+document.getElementById('li-confirm').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 
 // ══ NAV ══
 function showTab(name){
@@ -1116,16 +1164,20 @@ function renderPreciario(){
 function delPreciario(i){DB=getDB();DB.preciario.splice(i,1);saveDB(DB);renderPreciario();showToast('Eliminado')}
 
 // ══ AJUSTES ══
-function changePassword(){
+async function changePassword(){
   const old=document.getElementById('pass-old').value;
   const nw=document.getElementById('pass-new').value;
   const cf=document.getElementById('pass-confirm').value;
   if(!old||!nw||!cf){showToast('Rellena todos los campos',true);return}
   if(nw!==cf){showToast('Las contraseñas no coinciden',true);return}
-  if(nw.length<6){showToast('Mínimo 6 caracteres',true);return}
+  if(nw.length<8){showToast('Mínimo 8 caracteres',true);return}
   DB=getDB();const idx=DB.users.findIndex(u=>u.username===currentUser.username);
-  if(DB.users[idx].password!==old){showToast('Contraseña actual incorrecta',true);return}
-  DB.users[idx].password=nw;currentUser.password=nw;saveDB(DB);
+  if(idx<0){showToast('No se encuentra tu cuenta',true);return}
+  const check=await hashPass(old,DB.users[idx].salt);
+  if(check.hash!==DB.users[idx].hash){showToast('Contraseña actual incorrecta',true);return}
+  const h=await hashPass(nw);
+  DB=getDB();
+  DB.users[idx].salt=h.salt;DB.users[idx].hash=h.hash;currentUser=DB.users[idx];saveDB(DB);
   document.getElementById('pass-old').value='';document.getElementById('pass-new').value='';document.getElementById('pass-confirm').value='';
   showToast('Contraseña actualizada ✓');
 }
@@ -1136,20 +1188,22 @@ function renderUsers(){
   list.innerHTML=DB.users.map((u,i)=>`
     <div class="user-item">
       <div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div>
-      <div class="user-info"><div class="user-name">${u.username}</div><div class="user-meta">Contraseña: ${'•'.repeat(Math.min(u.password.length,8))}</div></div>
+      <div class="user-info"><div class="user-name">${u.username}</div><div class="user-meta">Contraseña protegida</div></div>
       <span class="role-badge role-${u.role}">${u.role==='admin'?'Admin':'Usuario'}</span>
       ${u.username!==currentUser.username?`<button class="btn btn-sm btn-red" onclick="promptDeleteUser(${i},'${u.username}')">Borrar</button>`:'<span style="font-size:11px;color:var(--text3)">Tú</span>'}
     </div>`).join('');
 }
-function addUser(){
+async function addUser(){
   const username=document.getElementById('new-user').value.trim().toLowerCase();
   const password=document.getElementById('new-pass').value;
-  const role=document.getElementById('new-role').value;
+  const role=document.getElementById('new-role').value==='admin'?'admin':'user';
   if(!username||!password){showToast('Rellena usuario y contraseña',true);return}
-  if(username.includes(' ')){showToast('Sin espacios en el usuario',true);return}
-  if(password.length<6){showToast('Mínimo 6 caracteres',true);return}
+  if(!validUsername(username)){showToast('Usuario: 3 a 20 letras, números, punto, guion o guion bajo',true);return}
+  if(password.length<8){showToast('Mínimo 8 caracteres',true);return}
   DB=getDB();if(DB.users.find(u=>u.username===username)){showToast('Ese usuario ya existe',true);return}
-  DB.users.push({username,password,role});saveDB(DB);
+  const h=await hashPass(password);
+  DB=getDB();
+  DB.users.push({username,salt:h.salt,hash:h.hash,role});saveDB(DB);
   document.getElementById('new-user').value='';document.getElementById('new-pass').value='';
   renderUsers();showToast(`Usuario "${username}" creado ✓`);
 }
@@ -1189,6 +1243,7 @@ function showToast(msg,isErr=false){
 
 // Init
 renderMediciones();
+refreshLoginMode();
 </script>
 </body>
 </html>
