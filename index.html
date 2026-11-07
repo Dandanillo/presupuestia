@@ -993,9 +993,12 @@ async function testAI(){
     const t=await callGemini('Responde solo con JSON válido.',[{text:'Devuelve exactamente {"ok":true}'}],64);
     document.getElementById('loading-overlay').classList.remove('active');
     showToast(t?'✅ Conexión con Gemini correcta':'Gemini respondió vacío',!t);
+    document.getElementById('ai-status').textContent=t?'✅ Conexión con Gemini correcta':'⚠️ Gemini respondió vacío';
   }catch(e){
     document.getElementById('loading-overlay').classList.remove('active');
     showToast(e.message,true);
+    // El error se queda fijo en pantalla para poder leerlo o copiarlo
+    document.getElementById('ai-status').textContent='❌ '+e.message;
   }
 }
 function friendlyGeminiError(status,d){
@@ -1362,10 +1365,14 @@ function togglePass(inputId, btnId){
 }
 
 // ══ TOAST ══
+let toastTimer=null;
 function showToast(msg,isErr=false){
   const t=document.getElementById('toast');
   t.textContent=msg;t.className='toast'+(isErr?' err':'');
-  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  // Los errores se quedan más tiempo para poder leerlos
+  toastTimer=setTimeout(()=>t.classList.remove('show'),isErr?9000:3000);
 }
 
 // Init
