@@ -469,6 +469,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="result-actions">
         <button class="btn" onclick="downloadPDF()">📄 Descargar PDF</button>
         <button class="btn btn-sec" id="share-pdf-btn" style="display:none" onclick="sharePDF()">📤 Compartir PDF</button>
+        <button class="btn btn-green" onclick="saveToDrive()">☁️ Guardar en Drive</button>
         <button class="btn btn-purple" onclick="saveToHistory()">💾 Guardar en historial</button>
         <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar texto</button>
         <button class="btn btn-sec" onclick="resetForm()">➕ Nuevo presupuesto</button>
@@ -482,6 +483,8 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="page-title">Historial</div>
       <div class="page-sub">Tus presupuestos guardados</div>
     </div>
+    <div id="hist-drive"></div>
+    <div id="hist-local-title"></div>
     <div id="hist-list"></div>
   </div>
 
@@ -522,6 +525,20 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="set-row">
       <div class="set-row-label">Usuario: <span id="set-username" style="color:var(--accent)">—</span></div>
       <div class="set-row-desc">Rol: <span id="set-role">—</span></div>
+    </div>
+    <div class="set-title">Drive compartido</div>
+    <div class="set-row">
+      <div class="set-row-desc">Guarda los presupuestos y los PDF en una hoja de Google que veis los dos. La guía paso a paso está en <b>drive/LEEME.md</b> del repositorio. La clave se guarda solo en este navegador: cada uno la pega en su móvil u ordenador.</div>
+      <div class="field"><label>Dirección (URL de la aplicación web)</label><input type="text" id="drive-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocorrect="off" autocapitalize="none"></div>
+      <div class="field"><label>Clave</label>
+        <div style="position:relative"><input type="password" id="drive-clave" placeholder="Pega aquí la clave de la pestaña Conexión" autocomplete="off" autocorrect="off" autocapitalize="none" style="padding-right:48px"><button onclick="togglePass('drive-clave','eye-drive')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-drive">👁️</button></div>
+      </div>
+      <button class="btn" onclick="saveDriveSettings()">Guardar</button>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <button class="btn btn-sec" onclick="testDrive()">Probar conexión</button>
+        <button class="btn btn-outline" onclick="clearDriveSettings()">Desconectar</button>
+      </div>
+      <div class="set-row-desc" id="drive-status" style="margin:12px 0 0"></div>
     </div>
     <div class="set-title">Datos de la empresa (para el PDF)</div>
     <div class="set-row">
@@ -775,10 +792,10 @@ function showTab(name){
     if(el)el.style.display=t===name?'block':'none';
     if(nav)nav.classList.toggle('active',t===name);
   });
-  if(name==='historial')renderHistory();
+  if(name==='historial'){renderHistory();renderDriveHistory()}
   if(name==='preciario')renderPreciario();
   if(name==='admin')renderUsers();
-  if(name==='ajustes'){renderAiSettings();renderEmpresaSettings()}
+  if(name==='ajustes'){renderAiSettings();renderEmpresaSettings();renderDriveSettings()}
 }
 
 // ══ STEPS ══
@@ -1279,6 +1296,166 @@ function delRow(id){
   const p=partidaRef(id);if(p)p._del=true;
   const el=document.getElementById(id);if(el)el.remove();
   recalcAll();
+}
+
+// ══ DRIVE COMPARTIDO (hoja de Google + script, ver drive/LEEME.md) ══
+// La clave solo se envía a script.google.com y se guarda únicamente en este navegador.
+const DRIVE_URL_RE=/^https:\/\/script\.google\.com\/(a\/macros\/[A-Za-z0-9._-]+\/|macros\/)s\/[A-Za-z0-9_-]+\/exec$/;
+const ESTADOS_PRES=['Borrador','Enviado','Aceptado','Rechazado'];
+let driveList=null;
+function getDriveCfg(){try{return JSON.parse(localStorage.getItem('pia_drive')||'null')||{}}catch{return{}}}
+function driveConectado(){const c=getDriveCfg();return !!(c.url&&c.clave)}
+function setOverlay(titulo,sub){
+  const o=document.getElementById('loading-overlay');
+  o.querySelector('.loading-text').textContent=titulo;o.querySelector('.loading-sub').textContent=sub||'';
+  o.classList.add('active');
+}
+function hideOverlay(){
+  const o=document.getElementById('loading-overlay');o.classList.remove('active');
+  o.querySelector('.loading-text').textContent='Generando presupuesto…';
+  o.querySelector('.loading-sub').textContent='La IA está analizando la obra';
+}
+function newId(){
+  const u=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
+  return u.replace(/[^A-Za-z0-9_-]/g,'');
+}
+async function driveCall(accion,datos){
+  const cfg=getDriveCfg();
+  if(!cfg.url||!cfg.clave)throw new Error('Drive no está conectado. Hazlo en Ajustes → Drive compartido');
+  if(!DRIVE_URL_RE.test(cfg.url))throw new Error('La dirección de Drive no es válida. Revísala en Ajustes');
+  let r;
+  try{
+    // text/plain evita la comprobación previa de CORS, que Google Apps Script no admite
+    r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({clave:cfg.clave,accion},datos||{})),redirect:'follow'});
+  }catch(e){throw new Error('No hay conexión con Drive. Revisa tu internet')}
+  let d;
+  try{d=await r.json()}catch(e){throw new Error('Drive no respondió como se esperaba. Comprueba que la implementación tenga acceso para "Cualquier persona"')}
+  if(!d||!d.ok)throw new Error((d&&d.error)||'Drive devolvió un error');
+  return d;
+}
+function renderDriveSettings(){
+  const c=getDriveCfg();
+  document.getElementById('drive-url').value=c.url||'';
+  const k=document.getElementById('drive-clave');k.value='';
+  k.placeholder=c.clave?('Clave guardada (termina en '+c.clave.slice(-4)+'). Pega otra para cambiarla'):'Pega aquí la clave de la pestaña Conexión';
+  document.getElementById('drive-status').textContent=(c.url&&c.clave)?'✅ Datos de Drive guardados en este navegador':'⚠️ Drive sin conectar: los presupuestos solo se guardan en este dispositivo';
+}
+function saveDriveSettings(){
+  const c=getDriveCfg();
+  const url=document.getElementById('drive-url').value.trim();
+  const clave=document.getElementById('drive-clave').value.trim();
+  if(!DRIVE_URL_RE.test(url)){showToast('La dirección tiene que empezar por https://script.google.com/ y acabar en /exec',true);return}
+  if(clave){
+    if(!/^[A-Za-z0-9]{20,100}$/.test(clave)){showToast('La clave no parece válida. Cópiala entera, sin espacios',true);return}
+    c.clave=clave;
+  }
+  if(!c.clave){showToast('Pega también la clave',true);return}
+  c.url=url;
+  try{localStorage.setItem('pia_drive',JSON.stringify(c))}catch(e){showToast('No se pudo guardar en este navegador',true);return}
+  renderDriveSettings();showToast('Guardado ✓');
+}
+function clearDriveSettings(){
+  try{localStorage.removeItem('pia_drive')}catch(e){}
+  renderDriveSettings();showToast('Drive desconectado en este navegador');
+}
+async function testDrive(){
+  setOverlay('Probando Drive…','');
+  const st=document.getElementById('drive-status');
+  try{
+    const d=await driveCall('ping');
+    hideOverlay();showToast('✅ Conexión con Drive correcta');
+    st.textContent='✅ Conectado a "'+(d.hoja||'la hoja')+'"';
+  }catch(e){
+    hideOverlay();showToast(e.message,true);
+    st.textContent='❌ '+e.message;
+  }
+}
+function budgetPayload(r){
+  const g=generatedData;const partidas=[];
+  (g.capitulos||[]).forEach(cap=>(cap.subcapitulos||[]).forEach(sub=>(sub.partidas||[]).forEach(p=>{
+    if(p._del)return;
+    partidas.push({capitulo:cap.nombre||'',subcapitulo:sub.nombre||'',codigo:p.codigo||'',descripcion:p.descripcion||'',cantidad:Number(p.cantidad)||0,unidad:p.unidad||'',precio:Number(p.precio_unitario)||0});
+  })));
+  return{
+    presupuesto:{id:g._id,numero:g._numero,fecha:g._fecha,obra:g._obra||'',cliente:g._cliente||'',direccion:g._direccion||'',tipo:g._tipo||'',
+      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,autor:currentUser?currentUser.username:'',notas:g.notas||''},
+    partidas
+  };
+}
+async function saveToDrive(){
+  if(!generatedData)return;
+  if(!driveConectado()){showToast('Primero conecta Drive en Ajustes',true);showTab('ajustes');return}
+  setOverlay('Guardando en Drive…','Hoja y PDF');
+  let guardado=false;
+  try{
+    if(!generatedData._id)generatedData._id=newId();
+    syncPdfFields();
+    const r=await buildBudgetPDF();           // fija número y fecha y calcula los totales del PDF
+    await driveCall('guardar',budgetPayload(r));
+    guardado=true;
+    const b64=r.doc.output('datauristring').split('base64,')[1];
+    await driveCall('subirPdf',{id:generatedData._id,nombre:r.filename,base64:b64});
+    hideOverlay();showToast('Guardado en Drive ✓ (hoja y PDF)');
+  }catch(e){
+    hideOverlay();
+    showToast(guardado?'El presupuesto se guardó, pero falló el PDF: '+e.message:e.message,true);
+    console.error(e.message);
+  }
+}
+async function renderDriveHistory(){
+  const box=document.getElementById('hist-drive'),tit=document.getElementById('hist-local-title');
+  if(!box||!tit)return;
+  if(!driveConectado()){box.innerHTML='';tit.innerHTML='';driveList=null;return}
+  const h=t=>`<div class="card-title" style="margin-top:6px">${t}</div>`;
+  tit.innerHTML=h('💻 En este dispositivo');
+  box.innerHTML=h('☁️ En Drive (compartido)')+'<div class="hist-meta" style="margin-bottom:14px">Cargando…</div>';
+  try{
+    const d=await driveCall('listar');
+    driveList=d.presupuestos||[];
+    if(!driveList.length){box.innerHTML=h('☁️ En Drive (compartido)')+'<div class="hist-meta" style="margin-bottom:14px">Todavía no hay presupuestos en Drive</div>';return}
+    box.innerHTML=h('☁️ En Drive (compartido)')+driveList.map((p,i)=>{
+      const pdf=/^https:\/\/(drive|docs)\.google\.com\//.test(p.pdf||'')?`<a href="${esc(p.pdf)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-size:13px;font-weight:600;text-decoration:none">📄 PDF</a>`:'';
+      const opts=ESTADOS_PRES.map(e=>`<option value="${e}"${e===p.estado?' selected':''}>${e}</option>`).join('');
+      return `<div class="hist-item" onclick="openDriveBudget(${i})">
+        <div class="hist-top"><div class="hist-name">${esc(p.obra||'Sin nombre')}</div><div class="hist-total">${fmtEUR(Number(p.total)||0)}</div></div>
+        <div class="hist-meta">${esc(p.cliente||'—')} · ${esc(p.fecha)} · ${esc(p.autor)} · ${esc(p.numero)}</div>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:10px" onclick="event.stopPropagation()">
+          <select onchange="setDriveEstado(${i},this.value)" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:inherit;font-size:13px">${opts}</select>${pdf}
+        </div></div>`}).join('');
+  }catch(e){
+    driveList=null;
+    box.innerHTML=h('☁️ En Drive (compartido)')+`<div class="hist-meta" style="margin-bottom:10px">❌ ${esc(e.message)}</div><button class="btn btn-sm btn-outline" style="margin-bottom:14px" onclick="renderDriveHistory()">Reintentar</button>`;
+  }
+}
+async function setDriveEstado(i,estado){
+  const p=driveList&&driveList[i];if(!p||ESTADOS_PRES.indexOf(estado)<0)return;
+  try{await driveCall('estado',{id:p.id,estado});p.estado=estado;showToast('Estado: '+estado+' ✓')}
+  catch(e){showToast(e.message,true);renderDriveHistory()}
+}
+async function openDriveBudget(i){
+  const p=driveList&&driveList[i];if(!p)return;
+  setOverlay('Abriendo desde Drive…','');
+  try{const d=await driveCall('abrir',{id:p.id});hideOverlay();loadDriveBudget(d)}
+  catch(e){hideOverlay();showToast(e.message,true)}
+}
+function loadDriveBudget(d){
+  const pr=d.presupuesto||{};
+  const caps=[],mapC=new Map();
+  (d.partidas||[]).forEach(q=>{
+    let c=mapC.get(q.capitulo);
+    if(!c){c={nombre:q.capitulo,subcapitulos:[],_m:new Map()};mapC.set(q.capitulo,c);caps.push(c)}
+    let s=c._m.get(q.subcapitulo);
+    if(!s){s={nombre:q.subcapitulo,partidas:[]};c._m.set(q.subcapitulo,s);c.subcapitulos.push(s)}
+    s.partidas.push({codigo:q.codigo,descripcion:q.descripcion,cantidad:q.cantidad,unidad:q.unidad,precio_unitario:q.precio});
+  });
+  caps.forEach(c=>{delete c._m});
+  generatedData={capitulos:caps,notas:pr.notas||'',_obra:pr.obra,_tipo:pr.tipo,_cliente:pr.cliente,_direccion:pr.direccion,_id:pr.id,_numero:pr.numero,_fecha:pr.fecha};
+  showTab('nuevo');
+  for(let i=1;i<=4;i++){const el=document.getElementById('step-'+i);if(el)el.style.display='none'}
+  document.getElementById('step-indicator').style.display='none';
+  document.getElementById('results-section').style.display='block';
+  renderResults(generatedData);
+  document.getElementById('margin-pct').value=Number(pr.margen)||0;updateSummary();
 }
 
 // ══ DATOS DE EMPRESA (para el PDF) ══
