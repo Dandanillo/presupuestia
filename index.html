@@ -516,6 +516,22 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="set-row-label">Usuario: <span id="set-username" style="color:var(--accent)">—</span></div>
       <div class="set-row-desc">Rol: <span id="set-role">—</span></div>
     </div>
+    <div class="set-title">IA gratuita (Gemini)</div>
+    <div class="set-row">
+      <div class="set-row-label">Clave de Gemini</div>
+      <div class="set-row-desc">Se guarda solo en este navegador: nunca va al código ni a GitHub. Tú y Lou tenéis que pegarla cada uno en vuestro móvil u ordenador.</div>
+      <div class="info-box"><strong>Cómo conseguirla (gratis, sin tarjeta):</strong> entra en <b>aistudio.google.com/apikey</b> con tu cuenta de Google, pulsa <b>Create API key</b> y copia la clave. Según las condiciones del plan gratuito, Google puede usar lo que envíes (fotos y textos) para mejorar sus productos.</div>
+      <div class="field"><label>Clave</label>
+        <div style="position:relative"><input type="password" id="ai-key" placeholder="Pega aquí tu clave de Gemini" autocomplete="off" autocorrect="off" autocapitalize="none" style="padding-right:48px"><button onclick="togglePass('ai-key','eye-ai')" type="button" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text3);line-height:1" id="eye-ai">👁️</button></div>
+      </div>
+      <div class="field"><label>Modelo (opcional)</label><input type="text" id="ai-model" placeholder="Vacío = automático" autocomplete="off" autocorrect="off" autocapitalize="none"></div>
+      <button class="btn" onclick="saveAiSettings()">Guardar</button>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <button class="btn btn-sec" onclick="testAI()">Probar conexión</button>
+        <button class="btn btn-outline" onclick="clearAiKey()">Borrar clave</button>
+      </div>
+      <div class="set-row-desc" id="ai-status" style="margin:12px 0 0"></div>
+    </div>
     <div class="set-title">Cambiar contraseña</div>
     <div class="set-row">
       <div class="set-row-desc">Actualiza tu contraseña de acceso</div>
@@ -735,6 +751,7 @@ function showTab(name){
   if(name==='historial')renderHistory();
   if(name==='preciario')renderPreciario();
   if(name==='admin')renderUsers();
+  if(name==='ajustes')renderAiSettings();
 }
 
 // ══ STEPS ══
@@ -771,7 +788,7 @@ function buildResumen(){
   const audio=document.getElementById('audio-transcript').value||document.getElementById('text-input').value;
   const meds=mediciones.length;
   document.getElementById('resumen-obra').innerHTML=
-    `<b>Obra:</b> ${nombre}<br><b>Tipo:</b> ${tipo}<br><b>Fotos:</b> ${fotos} imagen${fotos!==1?'es':''}<br><b>Descripción:</b> ${audio?'✅ Añadida':'⚠️ No añadida'}<br><b>Mediciones:</b> ${meds} zona${meds!==1?'s':''}`;
+    `<b>Obra:</b> ${esc(nombre)}<br><b>Tipo:</b> ${tipo}<br><b>Fotos:</b> ${fotos} imagen${fotos!==1?'es':''}<br><b>Descripción:</b> ${audio?'✅ Añadida':'⚠️ No añadida'}<br><b>Mediciones:</b> ${meds} zona${meds!==1?'s':''}`;
 }
 
 // ══ INPUT MODE ══
@@ -925,8 +942,8 @@ function renderMediciones(){
   if(mediciones.length===0){list.innerHTML='<div style="text-align:center;color:var(--text3);padding:16px;font-size:13px">No hay zonas añadidas todavía</div>';return}
   list.innerHTML=mediciones.map((m,i)=>`
     <div class="med-row">
-      <input type="text" placeholder="Zona (ej: Terraza)" value="${m.zona}" oninput="mediciones[${i}].zona=this.value">
-      <input type="number" class="med-row-val" placeholder="0" value="${m.valor}" oninput="mediciones[${i}].valor=this.value">
+      <input type="text" placeholder="Zona (ej: Terraza)" value="${esc(m.zona)}" oninput="mediciones[${i}].zona=this.value">
+      <input type="number" class="med-row-val" placeholder="0" value="${esc(m.valor)}" oninput="mediciones[${i}].valor=this.value">
       <select oninput="mediciones[${i}].unidad=this.value">
         <option${m.unidad==='M2'?' selected':''}>M2</option>
         <option${m.unidad==='ML'?' selected':''}>ML</option>
@@ -938,6 +955,115 @@ function renderMediciones(){
 }
 function removeMedicion(i){mediciones.splice(i,1);renderMediciones()}
 
+// ══ IA (Gemini) — la clave NO está en el código: cada persona la guarda en su navegador ══
+const GEMINI_MODELOS=['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite'];
+function getAI(){try{return JSON.parse(localStorage.getItem('pia_ai')||'null')||{}}catch{return{}}}
+function saveAI(o){try{localStorage.setItem('pia_ai',JSON.stringify(o))}catch{}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function renderAiSettings(){
+  const a=getAI();
+  const k=document.getElementById('ai-key');
+  k.value='';
+  k.placeholder=a.key?('Clave guardada (termina en '+a.key.slice(-4)+'). Pega otra para cambiarla'):'Pega aquí tu clave de Gemini';
+  document.getElementById('ai-model').value=a.model||'';
+  const st=document.getElementById('ai-status');
+  st.textContent=a.key?'✅ Clave guardada en este navegador':'⚠️ Todavía no hay clave: sin ella no se puede generar el presupuesto';
+}
+function saveAiSettings(){
+  const a=getAI();
+  const key=document.getElementById('ai-key').value.trim();
+  const model=document.getElementById('ai-model').value.trim();
+  if(key){
+    if(!/^[A-Za-z0-9_-]{20,}$/.test(key)){showToast('Esa clave no parece válida. Cópiala entera, sin espacios',true);return}
+    a.key=key;
+  }
+  if(model&&!/^[a-z0-9._-]{3,60}$/.test(model)){showToast('Nombre de modelo no válido',true);return}
+  a.model=model;
+  if(!a.key){showToast('Pega primero tu clave de Gemini',true);return}
+  saveAI(a);renderAiSettings();showToast('Guardado ✓');
+}
+function clearAiKey(){
+  const a=getAI();delete a.key;saveAI(a);renderAiSettings();showToast('Clave borrada de este navegador');
+}
+async function testAI(){
+  document.getElementById('loading-overlay').classList.add('active');
+  try{
+    const t=await callGemini('Responde solo con JSON válido.',[{text:'Devuelve exactamente {"ok":true}'}],64);
+    document.getElementById('loading-overlay').classList.remove('active');
+    showToast(t?'✅ Conexión con Gemini correcta':'Gemini respondió vacío',!t);
+  }catch(e){
+    document.getElementById('loading-overlay').classList.remove('active');
+    showToast(e.message,true);
+  }
+}
+function friendlyGeminiError(status,d){
+  const msg=d&&d.error&&d.error.message?d.error.message:'';
+  if(status===400&&/api key/i.test(msg))return'La clave de Gemini no es válida. Revísala en Ajustes';
+  if(status===401||status===403)return'La clave de Gemini no tiene permiso. Crea otra en aistudio.google.com/apikey';
+  if(status===429)return'Has llegado al límite gratuito de Gemini. Espera un minuto o inténtalo mañana';
+  if(status>=500)return'Gemini no responde ahora mismo. Inténtalo en unos minutos';
+  return'Gemini devolvió un error ('+status+')'+(msg?': '+msg:'');
+}
+async function callGemini(system,parts,maxTokens){
+  const a=getAI();
+  if(!a.key)throw new Error('Falta la clave de Gemini: pégala en Ajustes');
+  const modelos=a.model?[a.model]:GEMINI_MODELOS;
+  let ultimo=null;
+  for(const m of modelos){
+    let r;
+    try{
+      r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(m)+':generateContent',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-goog-api-key':a.key},
+        body:JSON.stringify({
+          systemInstruction:{parts:[{text:system}]},
+          contents:[{role:'user',parts}],
+          generationConfig:{responseMimeType:'application/json',temperature:0.3,maxOutputTokens:maxTokens||16000}
+        })
+      });
+    }catch(e){throw new Error('No hay conexión con Gemini. Revisa tu internet')}
+    const d=await r.json().catch(()=>({}));
+    if(r.status===404){ultimo=new Error('El modelo "'+m+'" no existe. '+(a.model?'Borra el campo Modelo en Ajustes para usar el automático':''));continue}
+    if(!r.ok)throw new Error(friendlyGeminiError(r.status,d));
+    const cand=d.candidates&&d.candidates[0];
+    if(!cand){throw new Error(d.promptFeedback&&d.promptFeedback.blockReason?'Gemini bloqueó la petición ('+d.promptFeedback.blockReason+')':'Gemini no devolvió respuesta')}
+    const text=((cand.content&&cand.content.parts)||[]).map(p=>p.text||'').join('');
+    if(cand.finishReason==='MAX_TOKENS')throw new Error('El presupuesto salió demasiado largo y se cortó. Divide la obra en partes más pequeñas');
+    if(!text)throw new Error('Gemini devolvió una respuesta vacía. Inténtalo otra vez');
+    return text;
+  }
+  throw ultimo||new Error('No se encontró ningún modelo de Gemini disponible');
+}
+function parseBudgetJSON(t){
+  let s=String(t).replace(/```json|```/g,'').trim();
+  let obj;
+  try{obj=JSON.parse(s)}catch{
+    const i=s.indexOf('{'),j=s.lastIndexOf('}');
+    if(i<0||j<=i)throw new Error('La IA no devolvió un presupuesto legible. Inténtalo otra vez');
+    try{obj=JSON.parse(s.slice(i,j+1))}catch{throw new Error('La IA no devolvió un presupuesto legible. Inténtalo otra vez')}
+  }
+  if(!obj||!Array.isArray(obj.capitulos))throw new Error('La IA no devolvió un presupuesto válido. Inténtalo otra vez');
+  return obj;
+}
+// Reduce la foto (máx. 1280 px, JPEG) para que la petición sea ligera y entre en el plan gratuito
+function resizeImage(f,max){
+  max=max||1280;
+  return new Promise((res,rej)=>{
+    const img=new Image();const url=URL.createObjectURL(f);
+    img.onload=()=>{
+      const s=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg',0.8).split(',')[1]);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('No se pudo leer una de las fotos'))};
+    img.src=url;
+  });
+}
+
 // ══ GENERATE ══
 async function generateBudget(){
   const nombre=document.getElementById('obra-nombre').value.trim();
@@ -947,6 +1073,7 @@ async function generateBudget(){
   const desc=currentInputMode==='audio'?audioText:textInput;
 
   if(!desc&&uploadedPhotos.length===0){showToast('Añade fotos o una descripción en el paso 2',true);goStep(2);return}
+  if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);showTab('ajustes');return}
 
   // Preciario
   const precItems=DB.preciario||[];
@@ -968,21 +1095,15 @@ Formato:
   const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc||'(ver fotos adjuntas)'}\nGenera el presupuesto completo en JSON.`;
 
   try{
-    let messages;
     // Solo fotos — los vídeos no se pueden enviar a la IA directamente
     const soloFotos=uploadedPhotos.filter(f=>f.type.startsWith('image/'));
     const tieneVideo=uploadedPhotos.some(f=>f.type.startsWith('video/'));
-    let videoNote=tieneVideo?'\n[El usuario también grabó vídeo de la obra — tenlo en cuenta para inferir más contexto]':'';
-
-    if(soloFotos.length>0){
-      const ic=await Promise.all(soloFotos.slice(0,4).map(async f=>{const b=await toB64(f);return{type:'image',source:{type:'base64',media_type:f.type||'image/jpeg',data:b}}}));
-      ic.push({type:'text',text:upr+videoNote});messages=[{role:'user',content:ic}];
-    }else{messages=[{role:'user',content:upr+videoNote}]}
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys,messages})});
-    const d=await r.json();
-    const t=d.content?.map(c=>c.text||'').join('')||'';
-    const cl=t.replace(/```json|```/g,'').trim();
-    generatedData=JSON.parse(cl);
+    const videoNote=tieneVideo?'\n[El usuario también grabó vídeo de la obra — tenlo en cuenta para inferir más contexto]':'';
+    const parts=[];
+    for(const f of soloFotos.slice(0,4)){parts.push({inlineData:{mimeType:'image/jpeg',data:await resizeImage(f)}})}
+    parts.push({text:upr+videoNote});
+    const t=await callGemini(sys,parts);
+    generatedData=parseBudgetJSON(t);
     generatedData._obra=nombre;generatedData._tipo=tipo;
     document.getElementById('loading-overlay').classList.remove('active');
     // Ocultar pasos y mostrar resultados
@@ -992,11 +1113,11 @@ Formato:
     renderResults(generatedData);
   }catch(e){
     document.getElementById('loading-overlay').classList.remove('active');
-    showToast('Error: '+e.message,true);
-    alert('Error detallado:\n'+e.message+'\n\n'+e.stack);
+    showToast(e.message,true);
     console.error(e);
   }
 }
+
 function toB64(f){return new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)})}
 
 // ══ RENDER RESULTS ══
@@ -1012,38 +1133,38 @@ function renderResults(data){
     (cap.subcapitulos||[]).forEach((sub,si)=>{
       let sx='';
       (sub.partidas||[]).forEach((p,pi)=>{
-        const t=(p.cantidad||0)*(p.precio_unitario||0);ct+=t;
+        const t=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0);ct+=t;
         const id=`p_${ci}_${si}_${pi}`;
         sx+=`<div class="partida-card" id="${id}">
           <div class="p-top">
             <div class="p-desc-wrap">
-              <div class="p-code">${p.codigo||''}</div>
-              <textarea class="p-desc" rows="2" onchange="recalcRow('${id}')">${p.descripcion||''}</textarea>
+              <div class="p-code">${esc(p.codigo)}</div>
+              <textarea class="p-desc" rows="2" onchange="recalcRow('${id}')">${esc(p.descripcion)}</textarea>
             </div>
             <button class="p-del" onclick="delRow('${id}')">✕</button>
           </div>
           <div class="p-numbers">
             <div class="p-num-item">
               <span class="p-num-label">Cant</span>
-              <input class="p-num-val" type="number" value="${p.cantidad||0}" onchange="recalcRow('${id}')" data-field="qty">
+              <input class="p-num-val" type="number" value="${Number(p.cantidad)||0}" onchange="recalcRow('${id}')" data-field="qty">
             </div>
-            <div class="p-unit-badge">${p.unidad||''}</div>
+            <div class="p-unit-badge">${esc(p.unidad)}</div>
             <div class="p-num-item">
               <span class="p-num-label">€/ud</span>
-              <input class="p-num-val" type="number" value="${(p.precio_unitario||0).toFixed(2)}" onchange="recalcRow('${id}')" data-field="price">
+              <input class="p-num-val" type="number" value="${(Number(p.precio_unitario)||0).toFixed(2)}" onchange="recalcRow('${id}')" data-field="price">
             </div>
             <div class="p-total-badge" id="${id}-total">${t.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div>
           </div>
         </div>`;
       });
-      sh+=`<div class="sub-block"><div class="sub-title">📁 ${sub.nombre||''}</div>${sx}</div>`;
+      sh+=`<div class="sub-block"><div class="sub-title">📁 ${esc(sub.nombre)}</div>${sx}</div>`;
     });
     total+=ct;
-    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${cap.nombre||''}</div><div class="chapter-total" id="ct-${ci}">${ct.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>${sh}`;
+    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${esc(cap.nombre)}</div><div class="chapter-total" id="ct-${ci}">${ct.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>${sh}`;
     container.appendChild(cd);
   });
   generatedData._baseTotal=total;
-  if(data.notas){const n=document.createElement('div');n.className='info-box';n.innerHTML=`<strong>⚠️ Notas:</strong> ${data.notas}`;container.appendChild(n)}
+  if(data.notas){const n=document.createElement('div');n.className='info-box';n.innerHTML=`<strong>⚠️ Notas:</strong> ${esc(data.notas)}`;container.appendChild(n)}
   document.getElementById('margin-pct').value=0;
   updateSummary();
   document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1090,7 +1211,7 @@ function showCopyModal(){
     (cap.subcapitulos||[]).forEach(sub=>{
       txt+=`\n  ── ${sub.nombre} ──\n`;
       (sub.partidas||[]).forEach(p=>{
-        const t=(p.cantidad||0)*(p.precio_unitario||0)*(1+mp/100);
+        const t=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0)*(1+mp/100);
         txt+=`  ${p.codigo}  ${p.descripcion}\n  Cant: ${p.cantidad} ${p.unidad} · P.Unit: ${p.precio_unitario}€ · Total: ${t.toFixed(2)}€\n\n`;
       });
     });
@@ -1113,8 +1234,8 @@ function renderHistory(){
   if(!DB.history||DB.history.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Sin presupuestos guardados</div><div class="empty-sub">Los presupuestos que guardes aparecerán aquí</div></div>`;return}
   list.innerHTML=DB.history.map((h,i)=>`
     <div class="hist-item" onclick="openHistModal(${i})">
-      <div class="hist-top"><div class="hist-name">${h.obra}</div><div class="hist-total">${(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>
-      <div class="hist-meta">${h.tipo} · ${h.fecha} · ${h.autor}</div>
+      <div class="hist-top"><div class="hist-name">${esc(h.obra)}</div><div class="hist-total">${(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>
+      <div class="hist-meta">${esc(h.tipo)} · ${esc(h.fecha)} · ${esc(h.autor)}</div>
     </div>`).join('');
 }
 function openHistModal(idx){
@@ -1157,7 +1278,7 @@ function renderPreciario(){
   if(!DB.preciario||DB.preciario.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Preciario vacío</div><div class="empty-sub">Añade tus partidas habituales con precios reales</div></div>`;return}
   list.innerHTML=DB.preciario.map((p,i)=>`
     <div class="prec-item">
-      <div class="prec-info"><div class="prec-name">${p.desc}</div><div class="prec-meta">${p.price.toFixed(2)} € / ${p.unit}<span class="tag">${p.cap}</span></div></div>
+      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${p.price.toFixed(2)} € / ${p.unit}<span class="tag">${esc(p.cap)}</span></div></div>
       <button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>
     </div>`).join('');
 }
