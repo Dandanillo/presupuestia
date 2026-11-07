@@ -972,10 +972,11 @@ function renderAiSettings(){
 }
 function saveAiSettings(){
   const a=getAI();
-  const key=document.getElementById('ai-key').value.trim();
+  const key=document.getElementById('ai-key').value.trim().replace(/^["'“”]+|["'“”]+$/g,'');
   const model=document.getElementById('ai-model').value.trim();
   if(key){
-    if(!/^[A-Za-z0-9_-]{20,}$/.test(key)){showToast('Esa clave no parece válida. Cópiala entera, sin espacios',true);return}
+    // Solo se rechazan espacios, caracteres raros o claves muy cortas; Google decide si la clave vale
+    if(!/^[\x21-\x7E]{20,200}$/.test(key)){showToast('Esa clave no parece válida. Cópiala entera, sin espacios',true);return}
     a.key=key;
   }
   if(model&&!/^[a-z0-9._-]{3,60}$/.test(model)){showToast('Nombre de modelo no válido',true);return}
