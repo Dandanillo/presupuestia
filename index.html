@@ -990,12 +990,19 @@ function clearAiKey(){
 async function testAI(){
   document.getElementById('loading-overlay').classList.add('active');
   try{
-    const t=await callGemini('Responde solo con JSON válido.',[{text:'Devuelve exactamente {"ok":true}'}],64);
+    // Margen amplio: estos modelos gastan parte de la respuesta "pensando"
+    const t=await callGemini('Responde solo con JSON válido.',[{text:'Devuelve exactamente {"ok":true}'}],2048);
     document.getElementById('loading-overlay').classList.remove('active');
     showToast(t?'✅ Conexión con Gemini correcta':'Gemini respondió vacío',!t);
     document.getElementById('ai-status').textContent=t?'✅ Conexión con Gemini correcta':'⚠️ Gemini respondió vacío';
   }catch(e){
     document.getElementById('loading-overlay').classList.remove('active');
+    // Si Gemini llegó a contestar pero se cortó, la conexión y la clave funcionan
+    if(e.code==='MAX_TOKENS'){
+      showToast('✅ Conexión con Gemini correcta');
+      document.getElementById('ai-status').textContent='✅ Conexión con Gemini correcta';
+      return;
+    }
     showToast(e.message,true);
     // El error se queda fijo en pantalla para poder leerlo o copiarlo
     document.getElementById('ai-status').textContent='❌ '+e.message;
@@ -1023,7 +1030,7 @@ async function callGemini(system,parts,maxTokens){
         body:JSON.stringify({
           systemInstruction:{parts:[{text:system}]},
           contents:[{role:'user',parts}],
-          generationConfig:{responseMimeType:'application/json',temperature:0.3,maxOutputTokens:maxTokens||16000}
+          generationConfig:{responseMimeType:'application/json',temperature:0.3,maxOutputTokens:maxTokens||24000}
         })
       });
     }catch(e){throw new Error('No hay conexión con Gemini. Revisa tu internet')}
@@ -1038,7 +1045,11 @@ async function callGemini(system,parts,maxTokens){
     const cand=d.candidates&&d.candidates[0];
     if(!cand){throw new Error(d.promptFeedback&&d.promptFeedback.blockReason?'Gemini bloqueó la petición ('+d.promptFeedback.blockReason+')':'Gemini no devolvió respuesta')}
     const text=((cand.content&&cand.content.parts)||[]).map(p=>p.text||'').join('');
-    if(cand.finishReason==='MAX_TOKENS')throw new Error('El presupuesto salió demasiado largo y se cortó. Divide la obra en partes más pequeñas');
+    if(cand.finishReason==='MAX_TOKENS'){
+      const cut=new Error('El presupuesto salió demasiado largo y se cortó. Divide la obra en partes más pequeñas');
+      cut.code='MAX_TOKENS';
+      throw cut;
+    }
     if(!text)throw new Error('Gemini devolvió una respuesta vacía. Inténtalo otra vez');
     return text;
   }
