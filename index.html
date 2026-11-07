@@ -461,9 +461,16 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         </div>
         <div class="summary-rows" id="summary-rows"></div>
       </div>
+      <div class="card">
+        <div class="card-title">📄 Datos para el PDF</div>
+        <div class="field"><label>Cliente</label><input type="text" id="pdf-cliente" maxlength="100" placeholder="Nombre del cliente" oninput="syncPdfFields()" autocomplete="off"></div>
+        <div class="field" style="margin-bottom:0"><label>Dirección de la obra</label><input type="text" id="pdf-direccion" maxlength="140" placeholder="Si es distinta del nombre de la obra" oninput="syncPdfFields()" autocomplete="off"></div>
+      </div>
       <div class="result-actions">
-        <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar para Óscartec</button>
+        <button class="btn" onclick="downloadPDF()">📄 Descargar PDF</button>
+        <button class="btn btn-sec" id="share-pdf-btn" style="display:none" onclick="sharePDF()">📤 Compartir PDF</button>
         <button class="btn btn-purple" onclick="saveToHistory()">💾 Guardar en historial</button>
+        <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar texto</button>
         <button class="btn btn-sec" onclick="resetForm()">➕ Nuevo presupuesto</button>
       </div>
     </div>
@@ -515,6 +522,26 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="set-row">
       <div class="set-row-label">Usuario: <span id="set-username" style="color:var(--accent)">—</span></div>
       <div class="set-row-desc">Rol: <span id="set-role">—</span></div>
+    </div>
+    <div class="set-title">Datos de la empresa (para el PDF)</div>
+    <div class="set-row">
+      <div class="set-row-desc">Salen en la cabecera y el pie del presupuesto en PDF. De momento se guardan solo en este navegador: cada uno tenéis que rellenarlos en vuestro móvil u ordenador.</div>
+      <div class="field"><label>Nombre de la empresa</label><input type="text" id="emp-nombre" maxlength="80" placeholder="Abroom" autocomplete="off"></div>
+      <div class="field"><label>CIF / NIF</label><input type="text" id="emp-nif" maxlength="20" autocomplete="off" autocapitalize="characters"></div>
+      <div class="field"><label>Dirección</label><input type="text" id="emp-dir" maxlength="120" autocomplete="off"></div>
+      <div class="field"><label>Teléfono</label><input type="tel" id="emp-tel" maxlength="30" autocomplete="off"></div>
+      <div class="field"><label>Email</label><input type="email" id="emp-email" maxlength="80" autocomplete="off" autocapitalize="none"></div>
+      <div class="field"><label>Web (opcional)</label><input type="text" id="emp-web" maxlength="80" autocomplete="off" autocapitalize="none"></div>
+      <div class="field"><label>Validez del presupuesto (días)</label><input type="number" id="emp-validez" min="1" max="365" value="30"></div>
+      <div class="field"><label>Condiciones (opcional)</label><textarea id="emp-cond" maxlength="800" placeholder="Ej: Forma de pago: 40% al inicio y 60% al finalizar. No incluye licencias ni tasas." style="min-height:90px"></textarea></div>
+      <div class="field"><label>Logo (opcional)</label>
+        <input type="file" id="emp-logo-file" accept="image/png,image/jpeg" onchange="onEmpLogo(this)">
+        <div id="emp-logo-wrap" style="display:none;margin-top:10px">
+          <img id="emp-logo-prev" alt="Logo" style="max-height:60px;max-width:100%;background:#fff;border-radius:8px;padding:6px;display:block">
+          <button class="btn btn-sm btn-outline" type="button" onclick="removeEmpLogo()" style="width:auto;margin-top:8px">Quitar logo</button>
+        </div>
+      </div>
+      <button class="btn" onclick="saveEmpresa()">Guardar datos de empresa</button>
     </div>
     <div class="set-title">IA gratuita (Gemini)</div>
     <div class="set-row">
@@ -610,8 +637,8 @@ audio{width:100%;margin-top:14px;border-radius:8px}
 <div class="modal-overlay" id="modal-copy">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">📋 Copiar para Óscartec</div>
-    <div class="modal-sub">Texto formateado listo para pegar en Óscartec</div>
+    <div class="modal-title">📋 Copiar texto</div>
+    <div class="modal-sub">Texto del presupuesto listo para pegar donde lo necesites</div>
     <div class="copy-box" id="copy-box"></div>
     <div class="modal-actions">
       <button class="btn" onclick="copyClipboard()">Copiar al portapapeles</button>
@@ -751,7 +778,7 @@ function showTab(name){
   if(name==='historial')renderHistory();
   if(name==='preciario')renderPreciario();
   if(name==='admin')renderUsers();
-  if(name==='ajustes')renderAiSettings();
+  if(name==='ajustes'){renderAiSettings();renderEmpresaSettings()}
 }
 
 // ══ STEPS ══
@@ -1187,6 +1214,9 @@ function renderResults(data){
   generatedData._baseTotal=total;
   if(data.notas){const n=document.createElement('div');n.className='info-box';n.innerHTML=`<strong>⚠️ Notas:</strong> ${esc(data.notas)}`;container.appendChild(n)}
   document.getElementById('margin-pct').value=0;
+  document.getElementById('pdf-cliente').value=data._cliente||'';
+  document.getElementById('pdf-direccion').value=data._direccion||'';
+  refreshShareBtn();
   updateSummary();
   document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -1251,6 +1281,283 @@ function delRow(id){
   recalcAll();
 }
 
+// ══ DATOS DE EMPRESA (para el PDF) ══
+function getEmpresa(){try{return JSON.parse(localStorage.getItem('pia_empresa')||'null')||{}}catch{return{}}}
+let empLogoState=null; // {data,w,h} del logo elegido en Ajustes (null = sin logo)
+function renderEmpresaSettings(){
+  const e=getEmpresa();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v==null?'':v};
+  set('emp-nombre',e.nombre);set('emp-nif',e.nif);set('emp-dir',e.dir);set('emp-tel',e.tel);
+  set('emp-email',e.email);set('emp-web',e.web);set('emp-cond',e.cond);set('emp-validez',e.validez||30);
+  empLogoState=e.logo?{data:e.logo,w:e.logoW,h:e.logoH}:null;
+  showEmpLogo();
+}
+function showEmpLogo(){
+  const wrap=document.getElementById('emp-logo-wrap');if(!wrap)return;
+  const img=document.getElementById('emp-logo-prev');
+  if(empLogoState){img.src=empLogoState.data;wrap.style.display='block'}else{img.removeAttribute('src');wrap.style.display='none'}
+}
+function onEmpLogo(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  if(!/^image\/(png|jpeg)$/.test(f.type)){showToast('El logo tiene que ser PNG o JPG',true);input.value='';return}
+  const img=new Image();const url=URL.createObjectURL(f);
+  img.onload=()=>{
+    // Se reduce para que ocupe poco (máx. 600 x 240 px)
+    const s=Math.min(1,600/img.width,240/img.height);
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(img.width*s));c.height=Math.max(1,Math.round(img.height*s));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(url);
+    empLogoState={data:c.toDataURL('image/png'),w:c.width,h:c.height};
+    showEmpLogo();input.value='';
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);showToast('No se pudo leer el logo',true)};
+  img.src=url;
+}
+function removeEmpLogo(){empLogoState=null;showEmpLogo()}
+function saveEmpresa(){
+  const val=id=>(document.getElementById(id).value||'').trim();
+  const validez=Math.min(365,Math.max(1,parseInt(document.getElementById('emp-validez').value)||30));
+  const e={nombre:val('emp-nombre'),nif:val('emp-nif'),dir:val('emp-dir'),tel:val('emp-tel'),email:val('emp-email'),web:val('emp-web'),cond:val('emp-cond'),validez};
+  if(empLogoState){e.logo=empLogoState.data;e.logoW=empLogoState.w;e.logoH=empLogoState.h}
+  try{localStorage.setItem('pia_empresa',JSON.stringify(e));showToast('Datos de empresa guardados ✓')}
+  catch(err){showToast('No se pudo guardar (almacenamiento lleno). Prueba con un logo más pequeño',true)}
+}
+function syncPdfFields(){
+  if(!generatedData)return;
+  generatedData._cliente=document.getElementById('pdf-cliente').value.trim();
+  generatedData._direccion=document.getElementById('pdf-direccion').value.trim();
+}
+
+// ══ PDF ══
+const _libs={};
+function loadScriptOnce(src){
+  if(!_libs[src])_libs[src]=new Promise((res,rej)=>{
+    const s=document.createElement('script');s.src=src;
+    s.onload=res;s.onerror=()=>{delete _libs[src];rej(new Error('No se pudo cargar el generador de PDF. Revisa tu conexión'))};
+    document.head.appendChild(s);
+  });
+  return _libs[src];
+}
+async function ensurePdfLibs(){
+  if(!(window.jspdf&&window.jspdf.jsPDF))await loadScriptOnce('vendor/jspdf.umd.min.js');
+  if(!window.jspdf.jsPDF.API.autoTable)await loadScriptOnce('vendor/jspdf.plugin.autotable.min.js');
+}
+function round2(x){return Math.round((x+Number.EPSILON)*100)/100}
+// 1234567.8 -> "1.234.567,80" (siempre con punto de miles, como en una factura)
+function fmtNum(n,dec){
+  if(dec==null)dec=2;
+  const neg=n<0;const parts=Math.abs(n).toFixed(dec).split('.');
+  const ent=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  return (neg?'-':'')+ent+(dec?','+parts[1]:'');
+}
+function fmtQty(q){return fmtNum(q,Number.isInteger(q)?0:2)}
+// Las fuentes estándar del PDF solo admiten Latin-1 y €: se limpia todo lo demás (emojis, flechas…)
+function pdfText(s){
+  return String(s==null?'':s)
+    .replace(/[‘’]/g,"'").replace(/[“”]/g,'"')
+    .replace(/[–—]/g,'-').replace(/…/g,'...').replace(/→/g,'->')
+    .replace(/≥/g,'>=').replace(/≤/g,'<=').replace(/≈/g,'~').replace(/≠/g,'!=').replace(/∅/g,'Ø').replace(/[•●]/g,'-')
+    .replace(/\r/g,'').replace(/[^\n -~ -ÿ€]/g,'')
+    .replace(/[ \t]{2,}/g,' ').trim();
+}
+function slugFile(s){
+  return String(s||'obra').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'obra';
+}
+async function buildBudgetPDF(){
+  if(!generatedData)throw new Error('No hay ningún presupuesto abierto');
+  await ensurePdfLibs();
+  const jsPDF=window.jspdf.jsPDF;
+  const emp=getEmpresa();
+  const empNombre=pdfText(emp.nombre)||'Abroom';
+  const validez=emp.validez||30;
+  const mp=parseFloat(document.getElementById('margin-pct').value)||0;
+  // Número y fecha: se fijan la primera vez y se conservan si se guarda en el historial
+  const now=new Date();const p2=n=>String(n).padStart(2,'0');
+  if(!generatedData._numero)generatedData._numero='P-'+now.getFullYear()+p2(now.getMonth()+1)+p2(now.getDate())+'-'+p2(now.getHours())+p2(now.getMinutes());
+  if(!generatedData._fecha)generatedData._fecha=p2(now.getDate())+'/'+p2(now.getMonth()+1)+'/'+now.getFullYear();
+
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,H=297,M=15,CW=W-2*M;
+  const NAVY=[30,41,59],SLATE=[51,65,85],GRAY=[100,110,125],LIGHT=[241,244,248],ACC=[245,158,11];
+  const T=pdfText;
+
+  // ── Cabecera: empresa a la izquierda, datos del presupuesto a la derecha ──
+  let yL=M;
+  if(emp.logo&&emp.logoW&&emp.logoH){
+    const ratio=emp.logoW/emp.logoH;let lh=18,lw=lh*ratio;
+    if(lw>50){lw=50;lh=lw/ratio}
+    try{doc.addImage(emp.logo,'PNG',M,yL,lw,lh);yL+=lh+3}catch(e){}
+  }
+  doc.setFont('helvetica','bold');doc.setFontSize(emp.logo?11:18);doc.setTextColor(...NAVY);
+  doc.text(empNombre,M,yL+(emp.logo?3:6));yL+=emp.logo?7:11;
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...GRAY);
+  const det=[];
+  if(emp.nif)det.push('CIF/NIF: '+T(emp.nif));
+  if(emp.dir)det.push(T(emp.dir));
+  const c2=[emp.tel&&T(emp.tel),emp.email&&T(emp.email),emp.web&&T(emp.web)].filter(Boolean).join('  ·  ');
+  if(c2)det.push(c2);
+  det.forEach(l=>{doc.splitTextToSize(l,100).forEach(x=>{doc.text(x,M,yL);yL+=4.2})});
+
+  let yR=M;
+  doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(...NAVY);
+  doc.text('PRESUPUESTO',W-M,yR+6,{align:'right'});yR+=12;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GRAY);
+  [['Nº',generatedData._numero],['Fecha',generatedData._fecha],['Validez',validez+' días']].forEach(r=>{
+    doc.text(r[0]+':  ',W-M-doc.getTextWidth(T(r[1])),yR,{align:'right'});
+    doc.setFont('helvetica','bold');doc.setTextColor(...NAVY);doc.text(T(r[1]),W-M,yR,{align:'right'});
+    doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);yR+=4.8;
+  });
+
+  let y=Math.max(yL,yR)+3;
+  doc.setFillColor(...ACC);doc.rect(M,y,CW,0.8,'F');y+=6;
+
+  // ── Cliente y obra ──
+  const colW=(CW-4)/2;
+  const cliente=T(generatedData._cliente)||'—';
+  const obraL=[T(generatedData._obra)||'Sin nombre'];
+  if(generatedData._direccion)obraL.push(T(generatedData._direccion));
+  if(generatedData._tipo)obraL.push('Tipo: '+T(generatedData._tipo));
+  doc.setFontSize(10);
+  const cliL=doc.splitTextToSize(cliente,colW-8);
+  const obraWrapped=[];obraL.forEach(l=>doc.splitTextToSize(l,colW-8).forEach(x=>obraWrapped.push(x)));
+  const boxH=7+Math.max(cliL.length,obraWrapped.length)*4.8+3;
+  doc.setFillColor(...LIGHT);doc.roundedRect(M,y,colW,boxH,1.5,1.5,'F');doc.roundedRect(M+colW+4,y,colW,boxH,1.5,1.5,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(...GRAY);
+  doc.text('CLIENTE',M+4,y+5);doc.text('OBRA',M+colW+8,y+5);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...NAVY);
+  cliL.forEach((l,i)=>doc.text(l,M+4,y+10.5+i*4.8));
+  obraWrapped.forEach((l,i)=>doc.text(l,M+colW+8,y+10.5+i*4.8));
+  y+=boxH+7;
+
+  // ── Tabla de partidas por capítulos (con el margen ya incluido en el precio) ──
+  const body=[];let base=0;
+  (generatedData.capitulos||[]).forEach((cap,ci)=>{
+    const rows=[];let ct=0;
+    (cap.subcapitulos||[]).forEach(sub=>{
+      const ps=(sub.partidas||[]).filter(p=>!p._del);
+      if(!ps.length)return;
+      rows.push([{content:T(sub.nombre),colSpan:6,styles:{fontStyle:'bold',fillColor:LIGHT,textColor:NAVY,fontSize:8.5,halign:'left'}}]);
+      ps.forEach(p=>{
+        const q=Number(p.cantidad)||0;
+        const pu=round2((Number(p.precio_unitario)||0)*(1+mp/100));
+        const imp=round2(q*pu);ct+=imp;
+        rows.push([T(p.codigo),T(p.descripcion),fmtQty(q),T(p.unidad),fmtNum(pu),fmtNum(imp)]);
+      });
+    });
+    if(!rows.length)return;
+    ct=round2(ct);base=round2(base+ct);
+    const capStyle={fontStyle:'bold',fillColor:SLATE,textColor:[255,255,255],fontSize:9,halign:'left'};
+    body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:5,styles:capStyle},{content:fmtNum(ct)+' €',styles:{...capStyle,halign:'right'}}]);
+    rows.forEach(r=>body.push(r));
+  });
+  const isHdr=body.map(r=>typeof r[0]==='object');
+  const tableOpts=(startY,rows,onRow)=>({
+    startY,margin:{top:M,left:M,right:M,bottom:22},
+    head:[['Cód.','Descripción','Cant.','Ud.','Precio ud.','Importe']],body:rows,
+    theme:'plain',showHead:'everyPage',rowPageBreak:'avoid',
+    styles:{font:'helvetica',fontSize:8.5,cellPadding:2,textColor:[40,48,60],valign:'middle',lineColor:[225,229,236],lineWidth:{bottom:0.2}},
+    headStyles:{fillColor:NAVY,textColor:[255,255,255],fontStyle:'bold',fontSize:8,lineWidth:0},
+    columnStyles:{0:{cellWidth:17},1:{cellWidth:'auto'},2:{cellWidth:16,halign:'right'},3:{cellWidth:12,halign:'center'},4:{cellWidth:24,halign:'right'},5:{cellWidth:26,halign:'right'}},
+    didParseCell:d=>{if(d.section==='head')d.cell.styles.halign=['left','left','right','center','right','right'][d.column.index]},
+    didDrawCell:d=>{if(onRow&&d.section==='body'&&d.column.index===0)onRow(d.row.index,d.pageNumber)}
+  });
+  // Dibuja la tabla en tramos; cada salto fuerza página nueva (para que un título de capítulo o subcapítulo no quede solo al final de una hoja)
+  const layoutTable=(target,breaks)=>{
+    const pageOf=[];let from=0;
+    breaks.concat([body.length]).forEach((to,si)=>{
+      if(to<=from)return;
+      if(si>0)target.addPage();
+      const f=from;
+      target.autoTable(tableOpts(si===0?y:M,body.slice(f,to),(ri,pg)=>{pageOf[f+ri]=pg}));
+      from=to;
+    });
+    return pageOf;
+  };
+  const breaks=[];
+  for(let it=0;it<40;it++){
+    const scratch=new jsPDF({unit:'mm',format:'a4'});
+    const pg=layoutTable(scratch,breaks);
+    let orphan=-1;
+    for(let r=1;r<body.length-1;r++){if(isHdr[r]&&pg[r]!==pg[r+1]){orphan=r;break}}
+    if(orphan<0||breaks.includes(orphan))break;
+    breaks.push(orphan);breaks.sort((a,b)=>a-b);
+  }
+  layoutTable(doc,breaks);
+  y=doc.lastAutoTable.finalY+7;
+
+  // ── Totales ──
+  const need=(h)=>{if(y+h>H-22){doc.addPage();y=M}};
+  const iva=round2(base*0.21),total=round2(base+iva);
+  need(36);
+  const bx=W-M-84;
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...NAVY);
+  doc.text('Base imponible',bx,y);doc.text(fmtNum(base)+' €',W-M,y,{align:'right'});y+=6;
+  doc.text('IVA 21%',bx,y);doc.text(fmtNum(iva)+' €',W-M,y,{align:'right'});y+=3.5;
+  doc.setFillColor(...NAVY);doc.rect(bx-3,y,87,11,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('TOTAL',bx,y+7.4);doc.text(fmtNum(total)+' €',W-M-1,y+7.4,{align:'right'});
+  doc.setFillColor(...ACC);doc.rect(bx-3,y+11,87,0.9,'F');
+  y+=19;
+
+  // ── Condiciones ──
+  const cond=['Presupuesto válido durante '+validez+' días desde su fecha.'];
+  if(emp.cond)cond.push(T(emp.cond));
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);
+  const condLines=[];cond.forEach(c=>c.split('\n').forEach(par=>doc.splitTextToSize(par,CW).forEach(x=>condLines.push(x))));
+  need(10+condLines.length*4+38);
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...GRAY);doc.text('CONDICIONES',M,y);y+=4.5;
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...NAVY);
+  condLines.forEach(l=>{doc.text(l,M,y);y+=4});
+  y+=6;
+
+  // ── Aceptación ──
+  const bw=(CW-6)/2,bh=30;
+  doc.setDrawColor(190,198,210);doc.setLineWidth(0.3);
+  doc.roundedRect(M,y,bw,bh,1.5,1.5,'S');doc.roundedRect(M+bw+6,y,bw,bh,1.5,1.5,'S');
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...GRAY);
+  doc.text('CONFORME DEL CLIENTE',M+4,y+5.5);doc.text('POR LA EMPRESA',M+bw+10,y+5.5);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);
+  doc.text('Fecha y firma:',M+4,y+bh-4);doc.text(empNombre,M+bw+10,y+bh-4);
+
+  // ── Pie de página en todas las hojas ──
+  const pages=doc.getNumberOfPages();
+  const foot=[empNombre,emp.nif&&T(emp.nif),emp.tel&&T(emp.tel),emp.email&&T(emp.email)].filter(Boolean).join('  ·  ');
+  for(let i=1;i<=pages;i++){
+    doc.setPage(i);
+    doc.setDrawColor(210,216,226);doc.setLineWidth(0.2);doc.line(M,H-14,W-M,H-14);
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(...GRAY);
+    doc.text(foot,M,H-9.5);
+    doc.text('Página '+i+' de '+pages,W-M,H-9.5,{align:'right'});
+  }
+  const fecha=(generatedData._fecha||'').split('/').reverse().join('');
+  const filename='Presupuesto_'+slugFile(generatedData._obra)+'_'+fecha+'.pdf';
+  return {doc,filename,base,iva,total};
+}
+async function downloadPDF(){
+  try{
+    showToast('Generando PDF…');
+    const r=await buildBudgetPDF();
+    r.doc.save(r.filename);
+    if(!getEmpresa().nombre)showToast('PDF listo. Rellena los datos de tu empresa en Ajustes para que salgan en la cabecera');
+    else showToast('PDF descargado ✓');
+  }catch(e){showToast(e.message,true);console.error(e)}
+}
+async function sharePDF(){
+  try{
+    const r=await buildBudgetPDF();
+    const file=new File([r.doc.output('blob')],r.filename,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:r.filename})}
+    else{r.doc.save(r.filename)}
+  }catch(e){if(e&&e.name==='AbortError')return;showToast(e.message,true);console.error(e)}
+}
+function refreshShareBtn(){
+  const b=document.getElementById('share-pdf-btn');if(!b)return;
+  let ok=false;
+  try{ok=!!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'a.pdf',{type:'application/pdf'})]}))}catch(e){}
+  b.style.display=ok?'flex':'none';
+}
+
 // ══ COPY ══
 function showCopyModal(){
   if(!generatedData)return;
@@ -1271,7 +1578,7 @@ function showCopyModal(){
   document.getElementById('copy-box').textContent=txt;
   openModal('modal-copy');
 }
-function copyClipboard(){navigator.clipboard.writeText(document.getElementById('copy-box').textContent).then(()=>{showToast('¡Copiado! Pégalo en Óscartec');closeModal('modal-copy')})}
+function copyClipboard(){navigator.clipboard.writeText(document.getElementById('copy-box').textContent).then(()=>{showToast('¡Copiado!');closeModal('modal-copy')})}
 
 // ══ HISTORIAL ══
 function saveToHistory(){
