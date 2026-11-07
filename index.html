@@ -1153,6 +1153,7 @@ function renderResults(data){
     (cap.subcapitulos||[]).forEach((sub,si)=>{
       let sx='';
       (sub.partidas||[]).forEach((p,pi)=>{
+        if(p._del)return;
         const t=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0);ct+=t;
         const id=`p_${ci}_${si}_${pi}`;
         sx+=`<div class="partida-card" id="${id}">
@@ -1173,14 +1174,14 @@ function renderResults(data){
               <span class="p-num-label">€/ud</span>
               <input class="p-num-val" type="number" value="${(Number(p.precio_unitario)||0).toFixed(2)}" onchange="recalcRow('${id}')" data-field="price">
             </div>
-            <div class="p-total-badge" id="${id}-total">${t.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div>
+            <div class="p-total-badge" id="${id}-total">${fmtEUR(t)}</div>
           </div>
         </div>`;
       });
       sh+=`<div class="sub-block"><div class="sub-title">📁 ${esc(sub.nombre)}</div>${sx}</div>`;
     });
     total+=ct;
-    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${esc(cap.nombre)}</div><div class="chapter-total" id="ct-${ci}">${ct.toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>${sh}`;
+    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${esc(cap.nombre)}</div><div class="chapter-total" id="ct-${ci}">${fmtEUR(ct)}</div></div>${sh}`;
     container.appendChild(cd);
   });
   generatedData._baseTotal=total;
@@ -1190,19 +1191,45 @@ function renderResults(data){
   document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function fmtEUR(n){return n.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'}
+// Devuelve la partida de los datos reales que corresponde a una tarjeta de pantalla (id p_capítulo_subcapítulo_partida)
+function partidaRef(id){
+  const m=/^p_(\d+)_(\d+)_(\d+)$/.exec(id);
+  if(!m||!generatedData)return null;
+  const cap=(generatedData.capitulos||[])[+m[1]];
+  const sub=cap&&(cap.subcapitulos||[])[+m[2]];
+  return (sub&&(sub.partidas||[])[+m[3]])||null;
+}
 function recalcRow(id){
   const row=document.getElementById(id);if(!row)return;
   const qty=parseFloat(row.querySelector('[data-field="qty"]')?.value)||0;
   const price=parseFloat(row.querySelector('[data-field="price"]')?.value)||0;
-  const t=qty*price;
+  // Lo que escribes a mano pasa a los datos reales (copia, historial, PDF…)
+  const p=partidaRef(id);
+  if(p){
+    p.cantidad=qty;p.precio_unitario=price;
+    const d=row.querySelector('.p-desc');if(d)p.descripcion=d.value;
+  }
   const el=document.getElementById(id+'-total');
-  if(el)el.textContent=t.toLocaleString('es-ES',{minimumFractionDigits:2})+' €';
+  if(el)el.textContent=fmtEUR(qty*price);
   recalcAll();
 }
+// Todos los totales se calculan desde los datos, nunca leyendo el texto de la pantalla
 function recalcAll(){
+  if(!generatedData)return;
   let total=0;
-  document.querySelectorAll('.p-total-badge').forEach(el=>{total+=parseFloat(el.textContent.replace(/[^0-9,.]/g,'').replace(',','.'))||0});
-  if(generatedData)generatedData._baseTotal=total;
+  (generatedData.capitulos||[]).forEach((cap,ci)=>{
+    let ct=0;
+    (cap.subcapitulos||[]).forEach(sub=>{
+      (sub.partidas||[]).forEach(p=>{
+        if(!p._del)ct+=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0);
+      });
+    });
+    total+=ct;
+    const el=document.getElementById('ct-'+ci);
+    if(el)el.textContent=fmtEUR(ct);
+  });
+  generatedData._baseTotal=total;
   updateSummary();
 }
 function updateSummary(){
@@ -1218,7 +1245,11 @@ function updateSummary(){
     <div class="s-divider"></div>
     <div class="s-row"><span class="s-label" style="font-weight:700;color:var(--text)">Total con IVA</span><span class="s-value total">${total.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`;
 }
-function delRow(id){const el=document.getElementById(id);if(el){el.remove();recalcAll()}}
+function delRow(id){
+  const p=partidaRef(id);if(p)p._del=true;
+  const el=document.getElementById(id);if(el)el.remove();
+  recalcAll();
+}
 
 // ══ COPY ══
 function showCopyModal(){
@@ -1231,6 +1262,7 @@ function showCopyModal(){
     (cap.subcapitulos||[]).forEach(sub=>{
       txt+=`\n  ── ${sub.nombre} ──\n`;
       (sub.partidas||[]).forEach(p=>{
+        if(p._del)return;
         const t=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0)*(1+mp/100);
         txt+=`  ${p.codigo}  ${p.descripcion}\n  Cant: ${p.cantidad} ${p.unidad} · P.Unit: ${p.precio_unitario}€ · Total: ${t.toFixed(2)}€\n\n`;
       });
