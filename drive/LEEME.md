@@ -64,6 +64,8 @@ Lou abre la hoja compartida, copia la URL y la clave de la pestaña **Conexión*
 - No hace falta tocar el script de Drive: esta mejora solo cambia la web.
 
 ## Seguridad
+- **Candado:** en un dispositivo nuevo, la web no deja ni crear cuenta hasta que se pegan la URL y la clave de Drive, y Drive las acepta. Quien no las tenga solo ve la pantalla de acceso privado. Es un candado en la propia web: protege vuestros datos (que están en Drive), pero no sirve contra alguien que modifique su copia de la página en su navegador, por eso la clave de Drive es lo que de verdad importa. No la compartáis.
+- Tu clave de Gemini se guarda solo en cada dispositivo. No la pases a nadie: sería la única forma de gastar tu cuota gratuita.
 - Quien tenga la **URL y la clave** puede leer y escribir en la hoja. No las compartáis fuera de vosotros.
 - Si la clave se filtra: en Apps Script ejecuta **`nuevaClave`**. La anterior deja de valer; copia la nueva de la pestaña Conexión y pégala en la web.
 - La clave se guarda solo en el navegador de cada uno, nunca en GitHub.

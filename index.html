@@ -270,6 +270,12 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     </div>
     <div class="login-title" id="login-title">Bienvenido 👋</div>
     <div class="login-sub" id="login-sub">Entra con tu usuario para empezar</div>
+    <div id="gate-box" style="display:none">
+      <div class="field"><label>Dirección de Drive (acaba en /exec)</label><input type="text" id="gate-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocorrect="off" autocapitalize="none"></div>
+      <div class="field"><label>Clave de acceso</label><input type="password" id="gate-clave" placeholder="La de la pestaña Conexión" autocomplete="off"></div>
+      <button class="btn" id="gate-btn" onclick="unlockWithDrive()">Comprobar y entrar →</button>
+    </div>
+    <div id="login-form">
     <div class="field"><label>Usuario</label><input type="text" id="li-user" placeholder="tu usuario" autocomplete="username" autocorrect="off" autocapitalize="none"></div>
     <div class="field"><label>Contraseña</label>
       <div style="position:relative">
@@ -281,6 +287,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <input type="password" id="li-confirm" placeholder="••••••••" autocomplete="new-password">
     </div>
     <button class="btn" id="li-btn" onclick="doLogin()">Entrar →</button>
+    </div>
     <div class="login-error" id="li-err">❌ Usuario o contraseña incorrectos</div>
   </div>
 </div>
@@ -726,6 +733,15 @@ let DB=initDB(),currentUser=null,generatedData=null,uploadedPhotos=[],mediciones
 // ══ AUTH ══
 function refreshLoginMode(){
   DB=initDB();
+  const cerrado=!driveConectado();   // sin la dirección y la clave de Drive no se puede ni crear cuenta
+  document.getElementById('gate-box').style.display=cerrado?'block':'none';
+  document.getElementById('login-form').style.display=cerrado?'none':'block';
+  document.getElementById('li-err').style.display='none';
+  if(cerrado){
+    document.getElementById('login-title').textContent='Acceso privado 🔒';
+    document.getElementById('login-sub').textContent='Esta app es de uso privado. Pega la dirección y la clave de Drive (pestaña Conexión de vuestra hoja).';
+    return;
+  }
   const primeraVez=DB.users.length===0;
   document.getElementById('login-title').textContent=primeraVez?'Crea tu cuenta 👋':'Bienvenido 👋';
   document.getElementById('login-sub').textContent=primeraVez?'Primera vez: elige tu usuario y una contraseña nueva. Esta cuenta será la de administrador.':'Entra con tu usuario para empezar';
@@ -734,6 +750,26 @@ function refreshLoginMode(){
   document.getElementById('li-pass').autocomplete=primeraVez?'new-password':'current-password';
   document.getElementById('li-err').style.display='none';
 }
+// Comprueba la dirección y la clave contra Drive; solo si Drive las acepta se guardan y se abre la entrada normal
+async function unlockWithDrive(){
+  const url=document.getElementById('gate-url').value.trim();
+  const clave=document.getElementById('gate-clave').value.trim();
+  if(!DRIVE_URL_RE.test(url)){showLoginError('La dirección tiene que empezar por https://script.google.com/ y acabar en /exec');return}
+  if(!/^[A-Za-z0-9]{20,100}$/.test(clave)){showLoginError('La clave no parece válida. Cópiala entera, sin espacios');return}
+  const antes=localStorage.getItem('pia_drive');
+  const btn=document.getElementById('gate-btn');btn.disabled=true;btn.textContent='Comprobando…';
+  try{
+    localStorage.setItem('pia_drive',JSON.stringify({url,clave}));
+    await driveCall('ping');
+    document.getElementById('gate-url').value='';document.getElementById('gate-clave').value='';
+    refreshLoginMode();
+  }catch(e){
+    try{if(antes===null)localStorage.removeItem('pia_drive');else localStorage.setItem('pia_drive',antes)}catch(_){}
+    showLoginError(e.message);
+  }
+  btn.disabled=false;btn.textContent='Comprobar y entrar →';
+}
+document.getElementById('gate-clave').addEventListener('keydown',e=>{if(e.key==='Enter')unlockWithDrive()});
 function showLoginError(msg){
   const e=document.getElementById('li-err');
   e.textContent='❌ '+msg;e.style.display='block';
