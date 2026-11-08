@@ -64,7 +64,7 @@ Quien tenga ese enlace entra en vuestros datos. Si se filtra, ejecuta `nuevaClav
 - En cada partida de un presupuesto hay un botón **📚 Guardar en preciario**, y abajo uno para guardar **todas** las partidas ya revisadas. Revisa los precios antes: si la partida ya existe, se actualiza.
 - Los precios se guardan en la pestaña **Preciario** de la hoja, y la IA los usa en los presupuestos nuevos de los dos.
 - Para **borrar** un precio, borra su fila en la pestaña Preciario de la hoja de Drive.
-- La columna **Zona** es opcional: sirve para tener precios distintos por zona.
+- **Precios por zona:** al crear una obra puedes poner la **zona** (Barcelona, Girona…). La IA recibe los precios generales (sin zona) y los de esa zona; si una partida tiene los dos, usa el de la zona, y los de otras zonas no los ve. Si la zona no tiene precios, usa los generales y ajusta el resto al mercado de esa zona. Al pulsar **Guardar en preciario**, las partidas se guardan con la zona de ese presupuesto. En la pestaña **Preciario** puedes filtrar por zona. La zona del presupuesto también queda en la columna **Notas** de Drive.
 - No hace falta tocar el script de Drive: esta mejora solo cambia la web.
 
 ## Cuentas (entrar desde cualquier sitio)

@@ -343,6 +343,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="card">
         <div class="card-title">📋 Datos de la obra</div>
         <div class="field"><label>Nombre o dirección</label><input type="text" id="obra-nombre" placeholder="Ej: Terrado C/ Major 12, Barcelona" autocorrect="off"></div>
+        <div class="field"><label>Zona de precios (opcional)</label><input type="text" id="obra-zona" list="zonas-list" maxlength="60" placeholder="Ej: Barcelona, Girona… Usa los precios de esa zona" autocomplete="off" autocorrect="off"><datalist id="zonas-list"></datalist></div>
         <div class="field"><label>¿Qué tipo de obra es?</label>
           <select id="obra-tipo">
             <option value="">Selecciona...</option>
@@ -525,6 +526,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <button class="btn btn-green" onclick="addPreciario()">Añadir al preciario</button>
     </div>
     <div class="info-box" id="prec-status" style="margin-bottom:12px"></div>
+    <div class="field"><label>Ver precios de</label><select id="prec-filtro" onchange="renderPreciario(true)"></select></div>
     <div id="prec-list"></div>
   </div>
 
@@ -897,6 +899,7 @@ function enterApp(found){
   document.getElementById('set-role').textContent=found.role==='admin'?'Administrador':'Usuario';
   document.getElementById('admin-section').style.display=found.role==='admin'?'block':'none';
   showTab('nuevo');
+  try{const z=localStorage.getItem('pia_zona');if(z&&!document.getElementById('obra-zona').value)document.getElementById('obra-zona').value=z}catch(e){}
   syncShared();
 }
 function doLogout(){
@@ -925,6 +928,7 @@ function showTab(name){
   });
   if(name==='historial'){renderHistory();renderDriveHistory()}
   if(name==='preciario')renderPreciario();
+  if(name==='nuevo')refreshZonas();
   if(name==='admin')renderUsers();
   if(name==='ajustes'){renderAiSettings();renderEmpresaSettings();renderDriveSettings();syncShared().then(()=>{const f=document.activeElement;if(document.getElementById('tab-ajustes').style.display!=='none'&&!(f&&/^(emp|ai)-/.test(f.id||''))){renderAiSettings();renderEmpresaSettings()}})}
 }
@@ -1263,6 +1267,8 @@ function resizeImage(f,max){
 async function generateBudget(){
   const nombre=document.getElementById('obra-nombre').value.trim();
   const tipo=document.getElementById('obra-tipo').value;
+  const zona=zonaActual();
+  try{localStorage.setItem('pia_zona',zona)}catch(e){}
   const audioText=document.getElementById('audio-transcript').value.trim();
   const textInput=document.getElementById('text-input').value.trim();
   const desc=currentInputMode==='audio'?audioText:textInput;
@@ -1274,9 +1280,9 @@ async function generateBudget(){
   // Preciario (si Drive está conectado, se refresca primero; si falla se usa la copia de este dispositivo)
   if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
   DB=getDB();
-  const precItems=(DB.preciario||[]).slice(-200);
+  const precItems=preciosDeZona(DB.preciario||[],zona).slice(-200);
   let precCtx='';
-  if(precItems.length>0){precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si lleva zona, solo vale para esa zona):\n';precItems.forEach(p=>{precCtx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
+  if(precItems.length>0){precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si una partida aparece con precio general y con precio de zona, usa el de la zona):\n';precItems.forEach(p=>{precCtx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
 
   // Mediciones
   let medCtx='';
@@ -1285,8 +1291,8 @@ async function generateBudget(){
 
   document.getElementById('loading-overlay').classList.add('active');
 
-  const sys=`Eres un experto en presupuestos de reformas y construcción en España (Barcelona, 2026). Analiza la descripción y devuelve un presupuesto en JSON puro sin markdown.
-Reglas: precios mercado España 2026 sin IVA, agrupa por capítulos y subcapítulos, descripciones detalladas, usa las mediciones reales si se proporcionan.${precCtx}${medCtx}
+  const sys=`Eres un experto en presupuestos de reformas y construcción en España (${zona||'Barcelona'}, 2026). Analiza la descripción y devuelve un presupuesto en JSON puro sin markdown.
+Reglas: precios mercado España 2026 sin IVA, agrupa por capítulos y subcapítulos, descripciones detalladas, usa las mediciones reales si se proporcionan.${zona?` La obra está en la zona: ${zona}. Los precios que no vengan del preciario ajústalos a los precios de mercado de esa zona.`:''}${precCtx}${medCtx}
 Formato:
 {"obra":"","tipo":"","capitulos":[{"nombre":"","subcapitulos":[{"nombre":"","partidas":[{"codigo":"1.1.1","descripcion":"","cantidad":0,"unidad":"M2","precio_unitario":0}]}]}],"notas":""}`;
 
@@ -1302,7 +1308,7 @@ Formato:
     parts.push({text:upr+videoNote});
     const t=await callGemini(sys,parts);
     generatedData=parseBudgetJSON(t);
-    generatedData._obra=nombre;generatedData._tipo=tipo;
+    generatedData._obra=nombre;generatedData._tipo=tipo;generatedData._zona=zona;
     document.getElementById('loading-overlay').classList.remove('active');
     // Ocultar pasos y mostrar resultados
     for(let i=1;i<=4;i++){const el=document.getElementById('step-'+i);if(el)el.style.display='none'}
@@ -1577,7 +1583,7 @@ function budgetPayload(r){
   })));
   return{
     presupuesto:{id:g._id,numero:g._numero,fecha:g._fecha,obra:g._obra||'',cliente:g._cliente||'',direccion:g._direccion||'',tipo:g._tipo||'',
-      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,autor:currentUser?currentUser.username:'',notas:g.notas||''},
+      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,autor:currentUser?currentUser.username:'',notas:(g._zona?'Zona: '+g._zona+'. ':'')+(g.notas||'')},
     partidas
   };
 }
@@ -2000,6 +2006,25 @@ function deleteFromHistory(){
 }
 
 // ══ PRECIARIO ══
+function normZona(z){return String(z||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim()}
+// Si la zona ya existe con otras mayúsculas ("girona" → "Girona"), se usa la forma que ya está en el preciario
+function zonaCanonica(z){z=String(z||'').trim().slice(0,60);return zonasConocidas().find(k=>normZona(k)===normZona(z))||z}
+function zonaActual(){const e=document.getElementById('obra-zona');return e?zonaCanonica(e.value):''}
+// Precios que valen para una zona: los generales (sin zona) y los de esa zona. Si hay de los dos para lo mismo, gana el de la zona.
+function preciosDeZona(items,zona){
+  const z=normZona(zona);
+  const validos=items.filter(p=>!p.zona||(z&&normZona(p.zona)===z));
+  const generales=validos.filter(p=>!p.zona),propios=validos.filter(p=>p.zona);
+  return generales.concat(propios);   // los de la zona van al final: son los que se conservan si se recorta la lista
+}
+function zonasConocidas(){
+  const v=new Map();((getDB()||{}).preciario||[]).forEach(p=>{if(p.zona&&!v.has(normZona(p.zona)))v.set(normZona(p.zona),p.zona)});
+  return Array.from(v.values()).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function refreshZonas(){
+  const dl=document.getElementById('zonas-list');
+  if(dl)dl.innerHTML=zonasConocidas().map(z=>`<option value="${esc(z)}">`).join('');
+}
 // Con Drive conectado, el preciario compartido (pestaña Preciario de la hoja) manda.
 // Aquí se guarda una copia para trabajar sin conexión.
 function precKey(p){const n=x=>String(x||'').trim().toLowerCase().replace(/\s+/g,' ');return n(p.desc)+'|'+n(p.unit)+'|'+n(p.zona)}
@@ -2051,7 +2076,7 @@ async function addPreciario(){
   const price=parseFloat(document.getElementById('prec-price').value);
   const unit=document.getElementById('prec-unit').value;
   const cap=document.getElementById('prec-cap').value;
-  const zona=document.getElementById('prec-zona').value.trim();
+  const zona=zonaCanonica(document.getElementById('prec-zona').value);
   if(!desc||!(price>0)){showToast('Rellena descripción y un precio mayor que 0',true);return}
   await savePrecItems([{desc,price,unit,cap,zona}]);
   document.getElementById('prec-desc').value='';document.getElementById('prec-price').value='';
@@ -2061,7 +2086,7 @@ function partidasDeDatos(){
   const out=[];
   ((generatedData&&generatedData.capitulos)||[]).forEach((cap,ci)=>(cap.subcapitulos||[]).forEach((sub,si)=>(sub.partidas||[]).forEach((p,pi)=>{
     if(p._del)return;
-    out.push({id:`p_${ci}_${si}_${pi}`,item:{desc:String(p.descripcion||'').trim(),unit:String(p.unidad||'').trim(),price:Number(p.precio_unitario)||0,cap:String(cap.nombre||'').trim(),zona:''}});
+    out.push({id:`p_${ci}_${si}_${pi}`,item:{desc:String(p.descripcion||'').trim(),unit:String(p.unidad||'').trim(),price:Number(p.precio_unitario)||0,cap:String(cap.nombre||'').trim(),zona:String((generatedData&&generatedData._zona)||'')}});
   })));
   return out;
 }
@@ -2084,19 +2109,30 @@ async function saveAllToPreciario(){
   const r=await savePrecItems(todas.slice(0,500).map(x=>x.item));
   if(r)todas.forEach(x=>marcarGuardada(x.id));
 }
-async function renderPreciario(){
+async function renderPreciario(soloFiltro){
   const list=document.getElementById('prec-list'),st=document.getElementById('prec-status');
-  if(driveConectado()){
-    st.textContent='⏳ Cargando el preciario compartido de Drive…';
-    try{const n=await syncPreciario();st.textContent=`☁️ Preciario compartido de Drive (${n} partidas). Para borrar una, quita su fila en la hoja Preciario de Drive.`}
-    catch(e){st.textContent='⚠️ No se pudo leer Drive ('+e.message+'). Se muestra la copia de este dispositivo.'}
-  }else{st.textContent='⚠️ Drive sin conectar: este preciario solo existe en este dispositivo.'}
+  if(!soloFiltro){
+    if(driveConectado()){
+      st.textContent='⏳ Cargando el preciario compartido de Drive…';
+      try{const n=await syncPreciario();st.textContent=`☁️ Preciario compartido de Drive (${n} partidas). Para borrar una, quita su fila en la hoja Preciario de Drive.`}
+      catch(e){st.textContent='⚠️ No se pudo leer Drive ('+e.message+'). Se muestra la copia de este dispositivo.'}
+    }else{st.textContent='⚠️ Drive sin conectar: este preciario solo existe en este dispositivo.'}
+  }
   DB=getDB();
+  // Filtro por zona
+  const sel=document.getElementById('prec-filtro');
+  const previo=sel.options.length?sel.value:'*';
+  const zonas=zonasConocidas();
+  sel.innerHTML='<option value="*">Todas las zonas</option><option value="">Solo los generales (sin zona)</option>'+zonas.map(z=>`<option value="${esc(normZona(z))}">${esc(z)}</option>`).join('');
+  sel.value=Array.from(sel.options).some(o=>o.value===previo)?previo:'*';
+  refreshZonas();
   if(!DB.preciario||DB.preciario.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Preciario vacío</div><div class="empty-sub">Añade tus partidas habituales o guarda las de un presupuesto revisado</div></div>`;return}
-  const conDrive=driveConectado();
-  list.innerHTML=DB.preciario.map((p,i)=>`
+  const conDrive=driveConectado(),f=sel.value;
+  const filas=DB.preciario.map((p,i)=>({p,i})).filter(({p})=>f==='*'||(f===''?!p.zona:normZona(p.zona)===f));
+  if(!filas.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">No hay precios en esta zona</div><div class="empty-sub">Guarda partidas desde un presupuesto con esa zona, o añádelas arriba</div></div>`;return}
+  list.innerHTML=filas.map(({p,i})=>`
     <div class="prec-item">
-      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">${esc(p.zona)}</span>`:''}</div></div>
+      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">📍 ${esc(p.zona)}</span>`:''}</div></div>
       ${conDrive?'':`<button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>`}
     </div>`).join('');
 }
