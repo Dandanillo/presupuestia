@@ -1547,18 +1547,26 @@ async function pullEmpresa(){
   const r=await driveCall('empresa.leer');
   const d=r.datos||{};
   const local=getEmpresa();
-  if(!d.nombre){
-    // Drive aún no tiene datos: se suben los de este dispositivo si los hay
-    if(local.nombre)await pushEmpresa(local);
+  if(!Object.keys(d).length){
+    // Drive aún no tiene datos de empresa: se suben los de este dispositivo si los hay
+    if(local.nombre||local.nif||local.dir||local.tel||local.email||local.web||local.cond||local.logo)await pushEmpresa(local);
     return;
   }
   const m=Object.assign({},local);
   ['nombre','nif','dir','tel','email','web','cond'].forEach(k=>{m[k]=String(d[k]||'')});
   m.validez=Math.min(365,Math.max(1,parseInt(d.validez)||30));
+  if('logo' in d){
+    // El script nuevo siempre devuelve el logo (vacío si no hay): Drive manda
+    if(d.logo&&LOGO_RE.test(d.logo)&&d.logo.length<=MAX_LOGO_DRIVE){m.logo=d.logo;m.logoW=Math.max(1,parseInt(d.logoW)||1);m.logoH=Math.max(1,parseInt(d.logoH)||1)}
+    else if(!(local.logo&&local.logo.length>MAX_LOGO_DRIVE)){delete m.logo;delete m.logoW;delete m.logoH}   // un logo propio demasiado grande para Drive se conserva
+  }
   try{localStorage.setItem('pia_empresa',JSON.stringify(m))}catch(e){}
+  // Drive aún no tiene logo (script antiguo o primera vez) y este dispositivo sí: se sube
+  if(!('logo' in d)&&local.logo&&LOGO_RE.test(local.logo)&&local.logo.length<=MAX_LOGO_DRIVE){try{await pushEmpresa(m)}catch(e){}}
 }
 async function pushEmpresa(e){
   const datos={};['nombre','nif','dir','tel','email','web','cond','validez'].forEach(k=>{datos[k]=e[k]==null?'':String(e[k])});
+  if(e.logo&&LOGO_RE.test(e.logo)&&e.logo.length<=MAX_LOGO_DRIVE){datos.logo=e.logo;datos.logoW=String(e.logoW||1);datos.logoH=String(e.logoH||1)}
   await driveCall('empresa.guardar',{datos});
 }
 async function syncShared(){
@@ -1686,18 +1694,33 @@ function showEmpLogo(){
   const img=document.getElementById('emp-logo-prev');
   if(empLogoState){img.src=empLogoState.data;wrap.style.display='block'}else{img.removeAttribute('src');wrap.style.display='none'}
 }
+const MAX_LOGO_DRIVE=45000;   // caracteres: lo que cabe en una celda de la hoja
+const LOGO_RE=/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/;
+// Reduce la imagen hasta que quepa en Drive: primero PNG (conserva la transparencia), luego JPG
+function shrinkLogo(img){
+  const tryOne=(esc,tipo,q)=>{
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(img.width*esc));c.height=Math.max(1,Math.round(img.height*esc));
+    const x=c.getContext('2d');
+    if(tipo==='image/jpeg'){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}
+    x.drawImage(img,0,0,c.width,c.height);
+    return{data:c.toDataURL(tipo,q),w:c.width,h:c.height};
+  };
+  const base=Math.min(1,600/img.width,240/img.height);
+  for(const f of [1,0.75,0.55,0.4,0.28]){const r=tryOne(base*f,'image/png');if(r.data.length<=MAX_LOGO_DRIVE)return r}
+  for(const [f,q] of [[0.75,0.85],[0.55,0.8],[0.4,0.75],[0.28,0.7]]){const r=tryOne(base*f,'image/jpeg',q);if(r.data.length<=MAX_LOGO_DRIVE)return r}
+  return null;
+}
 function onEmpLogo(input){
   const f=input.files&&input.files[0];if(!f)return;
   if(!/^image\/(png|jpeg)$/.test(f.type)){showToast('El logo tiene que ser PNG o JPG',true);input.value='';return}
   const img=new Image();const url=URL.createObjectURL(f);
   img.onload=()=>{
-    // Se reduce para que ocupe poco (máx. 600 x 240 px)
-    const s=Math.min(1,600/img.width,240/img.height);
-    const c=document.createElement('canvas');
-    c.width=Math.max(1,Math.round(img.width*s));c.height=Math.max(1,Math.round(img.height*s));
-    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    // Se reduce (máx. 600 x 240 px) hasta que quepa en Drive
+    const r=shrinkLogo(img);
     URL.revokeObjectURL(url);
-    empLogoState={data:c.toDataURL('image/png'),w:c.width,h:c.height};
+    if(!r){showToast('El logo es demasiado complejo. Prueba con una versión más simple o más pequeña',true);input.value='';return}
+    empLogoState=r;
     showEmpLogo();input.value='';
   };
   img.onerror=()=>{URL.revokeObjectURL(url);showToast('No se pudo leer el logo',true)};
@@ -1712,7 +1735,8 @@ async function saveEmpresa(){
   try{localStorage.setItem('pia_empresa',JSON.stringify(e))}
   catch(err){showToast('No se pudo guardar (almacenamiento lleno). Prueba con un logo más pequeño',true);return}
   if(!driveConectado()){showToast('Datos de empresa guardados ✓ (solo en este dispositivo)');return}
-  try{await pushEmpresa(e);showToast('Datos de empresa guardados y compartidos por Drive ✓ (el logo es solo de este dispositivo)')}
+  const grande=e.logo&&e.logo.length>MAX_LOGO_DRIVE;
+  try{await pushEmpresa(e);showToast(grande?'Datos guardados en Drive, pero este logo es demasiado grande para compartirlo: vuelve a subirlo para que se reduzca':'Datos de empresa y logo guardados y compartidos por Drive ✓',!!grande)}
   catch(err){showToast('Guardado aquí, pero no en Drive: '+scriptViejo(err).message,true)}
 }
 function syncPdfFields(){
@@ -1779,7 +1803,7 @@ async function buildBudgetPDF(){
   if(emp.logo&&emp.logoW&&emp.logoH){
     const ratio=emp.logoW/emp.logoH;let lh=18,lw=lh*ratio;
     if(lw>50){lw=50;lh=lw/ratio}
-    try{doc.addImage(emp.logo,'PNG',M,yL,lw,lh);yL+=lh+3}catch(e){}
+    try{doc.addImage(emp.logo,/^data:image\/jpeg/.test(emp.logo)?'JPEG':'PNG',M,yL,lw,lh);yL+=lh+3}catch(e){}
   }
   doc.setFont('helvetica','bold');doc.setFontSize(emp.logo?11:18);doc.setTextColor(...NAVY);
   doc.text(empNombre,M,yL+(emp.logo?3:6));yL+=emp.logo?7:11;
