@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>PresupuestIA – Abroom</title>
+<title>PresupuestIA</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 :root{
@@ -265,7 +265,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="logo-icon">🏗️</div>
       <div class="login-logo-text">
         <span>PresupuestIA</span>
-        <small>Abroom · Gestión de obras</small>
+        <small>Gestión de obras</small>
       </div>
     </div>
     <div class="login-title" id="login-title">Bienvenido 👋</div>
@@ -348,9 +348,12 @@ audio{width:100%;margin-top:14px;border-radius:8px}
           <select id="obra-tipo">
             <option value="">Selecciona...</option>
             <option>Reforma integral</option><option>Reforma parcial</option>
-            <option>Terrado / Cubierta</option><option>Terraza</option>
-            <option>Jardín / Exterior</option><option>Impermeabilización</option>
-            <option>Instalaciones</option><option>Pintura</option><option>Otro</option>
+            <option>Cocina</option><option>Baño</option>
+            <option>Suelos / Pavimentos</option><option>Ventanas y carpintería</option>
+            <option>Albañilería / Tabiquería</option><option>Pintura</option>
+            <option>Instalaciones</option><option>Terrado / Cubierta</option>
+            <option>Terraza</option><option>Jardín / Exterior</option>
+            <option>Impermeabilización</option><option>Otro (descríbelo en el paso 2)</option>
           </select>
         </div>
       </div>
@@ -563,7 +566,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="set-title">Datos de la empresa (para el PDF)</div>
     <div class="set-row">
       <div class="set-row-desc">Salen en la cabecera y el pie del presupuesto en PDF. De momento se guardan solo en este navegador: cada uno tenéis que rellenarlos en vuestro móvil u ordenador.</div>
-      <div class="field"><label>Nombre de la empresa</label><input type="text" id="emp-nombre" maxlength="80" placeholder="Abroom" autocomplete="off"></div>
+      <div class="field"><label>Nombre de la empresa</label><input type="text" id="emp-nombre" maxlength="80" placeholder="Nombre de tu empresa" autocomplete="off"></div>
       <div class="field"><label>CIF / NIF</label><input type="text" id="emp-nif" maxlength="20" autocomplete="off" autocapitalize="characters"></div>
       <div class="field"><label>Dirección</label><input type="text" id="emp-dir" maxlength="120" autocomplete="off"></div>
       <div class="field"><label>Teléfono</label><input type="tel" id="emp-tel" maxlength="30" autocomplete="off"></div>
@@ -1754,7 +1757,7 @@ async function buildBudgetPDF(){
   await ensurePdfLibs();
   const jsPDF=window.jspdf.jsPDF;
   const emp=getEmpresa();
-  const empNombre=pdfText(emp.nombre)||'Abroom';
+  const empNombre=pdfText(emp.nombre)||'';   // sin datos de empresa, la cabecera queda en blanco
   const validez=emp.validez||30;
   const mp=parseFloat(document.getElementById('margin-pct').value)||0;
   // Número y fecha: se fijan la primera vez y se conservan si se guarda en el historial
