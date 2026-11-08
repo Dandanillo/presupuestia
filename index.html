@@ -286,6 +286,9 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="field" id="li-confirm-wrap" style="display:none"><label>Repite la contraseña</label>
       <input type="password" id="li-confirm" placeholder="••••••••" autocomplete="new-password">
     </div>
+    <div class="field" id="setup-clave-wrap" style="display:none"><label>Clave de Drive (pestaña Conexión, celda B1)</label>
+      <input type="password" id="setup-clave" placeholder="Solo para crear la primera cuenta" autocomplete="off" autocorrect="off" autocapitalize="none">
+    </div>
     <button class="btn" id="li-btn" onclick="doLogin()">Entrar →</button>
     </div>
     <div class="login-error" id="li-err">❌ Usuario o contraseña incorrectos</div>
@@ -537,7 +540,9 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="set-row-desc">Rol: <span id="set-role">—</span></div>
     </div>
     <div class="set-title">Drive compartido</div>
-    <div class="set-row">
+    <div class="set-row" id="drive-card">
+      <div class="set-row-desc" id="drive-auto" style="display:none">Conectado con tu cuenta: no hay nada que configurar. Los presupuestos, el preciario y los datos de la empresa se guardan en la hoja de Google compartida.</div>
+      <div id="drive-manual">
       <div class="set-row-desc">Guarda los presupuestos y los PDF en una hoja de Google que veis los dos. La guía paso a paso está en <b>drive/LEEME.md</b> del repositorio. La clave se guarda solo en este navegador: cada uno la pega en su móvil u ordenador.</div>
       <div class="field"><label>Dirección (URL de la aplicación web)</label><input type="text" id="drive-url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" autocorrect="off" autocapitalize="none"></div>
       <div class="field"><label>Clave</label>
@@ -548,8 +553,9 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button class="btn btn-sec" onclick="testDrive()">Probar conexión</button>
         <button class="btn btn-outline" onclick="clearDriveSettings()">Desconectar</button>
       </div>
-      <button class="btn btn-sec" style="margin-top:10px" onclick="copyAccessLink()">🔗 Copiar enlace de acceso para Lou</button>
-      <div class="set-row-desc" style="margin-top:8px">Mándaselo solo a ella, por un chat privado. Quien tenga ese enlace entra en vuestros datos. Al abrirlo, su dispositivo se conecta a Drive sin pegar nada.</div>
+      <button class="btn btn-sec" style="margin-top:10px" onclick="copyAccessLink()">🔗 Copiar enlace de acceso</button>
+      <div class="set-row-desc" style="margin-top:8px">Solo hace falta si aún no usáis cuentas en Drive. Quien tenga ese enlace entra en vuestros datos.</div>
+      </div>
       <div class="set-row-desc" id="drive-status" style="margin:12px 0 0"></div>
     </div>
     <div class="set-title">Datos de la empresa (para el PDF)</div>
@@ -626,7 +632,11 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="card">
       <div class="card-title">➕ Nuevo usuario</div>
       <div class="field"><label>Nombre de usuario</label><input type="text" id="new-user" placeholder="sin espacios" autocorrect="off" autocapitalize="none"></div>
-      <div class="field"><label>Contraseña inicial</label><input type="password" id="new-pass" placeholder="mínimo 8 caracteres"></div>
+      <div class="field"><label>Contraseña inicial</label><input type="password" id="new-pass" placeholder="mínimo 10 caracteres" autocomplete="new-password"></div>
+      <div class="field"><label>Nombre (opcional)</label><input type="text" id="new-nombre" maxlength="80" autocomplete="off"></div>
+      <div class="field"><label>Correo (opcional)</label><input type="email" id="new-correo" maxlength="100" autocomplete="off" autocapitalize="none"></div>
+      <div class="field"><label>Teléfono (opcional)</label><input type="tel" id="new-tel" maxlength="30" autocomplete="off"></div>
+      <div class="field"><label>Dirección (opcional)</label><input type="text" id="new-dir" maxlength="150" autocomplete="off"></div>
       <div class="field"><label>Rol</label>
         <select id="new-role">
           <option value="user">Usuario — crea y consulta presupuestos</option>
@@ -738,7 +748,8 @@ function validUsername(u){return /^[a-z0-9_.-]{3,20}$/.test(u)}
 let DB=initDB(),currentUser=null,generatedData=null,uploadedPhotos=[],mediciones=[],selectedHistIdx=null,userToDelete=null,currentInputMode='audio';
 
 // ══ AUTH ══
-function refreshLoginMode(){
+async function refreshLoginMode(){
+  if(modoCuentas()){await refreshLoginCuentas();return}
   DB=initDB();
   const cerrado=!driveConectado();   // sin la dirección y la clave de Drive no se puede ni crear cuenta
   document.getElementById('gate-box').style.display=cerrado?'block':'none';
@@ -758,6 +769,56 @@ function refreshLoginMode(){
   document.getElementById('li-err').style.display='none';
 }
 // Comprueba la dirección y la clave contra Drive; solo si Drive las acepta se guardan y se abre la entrada normal
+// ── Cuentas en Drive (se activa cuando DRIVE_URL_FIJA tiene la dirección del script) ──
+let setupMode=false,sesionPH=null,adminLista=[];
+async function huellaPass(user,pass){
+  // La contraseña no sale del dispositivo: se envía solo esta huella lenta (PBKDF2, 100.000 vueltas)
+  const enc=new TextEncoder();
+  const k=await crypto.subtle.importKey('raw',enc.encode(pass),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:enc.encode('presupuestia:'+user),iterations:100000},k,256);
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function dispositivoTxt(){try{return String(navigator.userAgent||'').slice(0,160)}catch(e){return''}}
+async function refreshLoginCuentas(){
+  document.getElementById('gate-box').style.display='none';
+  document.getElementById('login-form').style.display='block';
+  document.getElementById('li-err').style.display='none';
+  document.getElementById('li-pass').autocomplete='current-password';
+  setupMode=false;
+  let conf=true;
+  try{const r=await driveCallPublic('auth.estado');conf=!!r.configurado}catch(e){showLoginError(e.message)}
+  setupMode=!conf;
+  document.getElementById('login-title').textContent=setupMode?'Primera configuración 👋':'Bienvenido 👋';
+  document.getElementById('login-sub').textContent=setupMode?'Aún no hay cuentas. Crea la tuya (será la de administrador) con la clave de Drive.':'Entra con tu usuario y contraseña';
+  document.getElementById('li-confirm-wrap').style.display=setupMode?'block':'none';
+  document.getElementById('setup-clave-wrap').style.display=setupMode?'block':'none';
+  document.getElementById('li-btn').textContent=setupMode?'Crear cuenta →':'Entrar →';
+}
+async function doLoginDrive(){
+  const u=document.getElementById('li-user').value.trim().toLowerCase();
+  const p=document.getElementById('li-pass').value;
+  const btn=document.getElementById('li-btn');
+  if(!validUsername(u)){showLoginError('Usuario: de 3 a 20 letras, números, punto, guion o guion bajo');return}
+  if(!p){showLoginError('Escribe tu contraseña');return}
+  btn.disabled=true;
+  try{
+    const ph=await huellaPass(u,p);
+    if(setupMode){
+      const c=document.getElementById('li-confirm').value;
+      const clave=document.getElementById('setup-clave').value.trim();
+      if(p.length<10)throw new Error('La contraseña necesita al menos 10 caracteres');
+      if(p!==c)throw new Error('Las contraseñas no coinciden');
+      if(!/^[A-Za-z0-9]{20,100}$/.test(clave))throw new Error('La clave de Drive no parece válida. Cópiala entera, sin espacios');
+      await postDrive(getDriveCfg().url,{clave,accion:'auth.setup',usuario:u,ph,perfil:{nombre:u},dispositivo:dispositivoTxt()});
+    }
+    const r=await driveCallPublic('auth.login',{usuario:u,ph,dispositivo:dispositivoTxt()});
+    try{localStorage.setItem('pia_drive',JSON.stringify({clave:r.clave}))}catch(e){}
+    sesionPH=ph;
+    document.getElementById('setup-clave').value='';
+    enterApp({username:r.usuario,role:r.rol});
+  }catch(e){showLoginError(e.message)}
+  btn.disabled=false;
+}
 async function unlockWithDrive(){
   const url=document.getElementById('gate-url').value.trim();
   const clave=document.getElementById('gate-clave').value.trim();
@@ -787,7 +848,7 @@ async function openAccessLink(){
   if(!h.startsWith('#acceso='))return;
   const raw=h.slice(8);
   try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
-  if(driveConectado())return;
+  if(modoCuentas()||driveConectado())return;
   try{
     const o=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/')));
     if(typeof o.u!=='string'||typeof o.k!=='string')throw 0;
@@ -800,6 +861,7 @@ function showLoginError(msg){
   e.textContent='❌ '+msg;e.style.display='block';
 }
 async function doLogin(){
+  if(modoCuentas()){await doLoginDrive();return}
   const u=document.getElementById('li-user').value.trim().toLowerCase();
   const p=document.getElementById('li-pass').value;
   DB=initDB();
@@ -838,7 +900,11 @@ function enterApp(found){
   syncShared();
 }
 function doLogout(){
-  currentUser=null;
+  currentUser=null;sesionPH=null;
+  if(modoCuentas()){
+    // En modo cuentas, al salir este dispositivo olvida la clave de Drive y la de Gemini que vino compartida
+    try{localStorage.removeItem('pia_drive');if(getAI().shared)localStorage.removeItem('pia_ai')}catch(e){}
+  }
   document.getElementById('s-app').classList.remove('active');
   document.getElementById('s-login').classList.add('active');
   document.getElementById('li-user').value='';document.getElementById('li-pass').value='';document.getElementById('li-confirm').value='';
@@ -1372,7 +1438,9 @@ function delRow(id){
 const DRIVE_URL_RE=/^https:\/\/script\.google\.com\/(a\/macros\/[A-Za-z0-9._-]+\/|macros\/)s\/[A-Za-z0-9_-]+\/exec$/;
 const ESTADOS_PRES=['Borrador','Enviado','Aceptado','Rechazado'];
 let driveList=null;
-function getDriveCfg(){try{return JSON.parse(localStorage.getItem('pia_drive')||'null')||{}}catch{return{}}}
+let DRIVE_URL_FIJA='';   // dirección del script de Drive: si está puesta, las cuentas viven en Drive
+function modoCuentas(){return !!DRIVE_URL_FIJA}
+function getDriveCfg(){let c={};try{c=JSON.parse(localStorage.getItem('pia_drive')||'null')||{}}catch{}if(DRIVE_URL_FIJA)c.url=DRIVE_URL_FIJA;return c}
 function driveConectado(){const c=getDriveCfg();return !!(c.url&&c.clave)}
 function setOverlay(titulo,sub){
   const o=document.getElementById('loading-overlay');
@@ -1388,22 +1456,30 @@ function newId(){
   const u=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
   return u.replace(/[^A-Za-z0-9_-]/g,'');
 }
-async function driveCall(accion,datos){
-  const cfg=getDriveCfg();
-  if(!cfg.url||!cfg.clave)throw new Error('Drive no está conectado. Hazlo en Ajustes → Drive compartido');
-  if(!DRIVE_URL_RE.test(cfg.url))throw new Error('La dirección de Drive no es válida. Revísala en Ajustes');
+async function postDrive(url,cuerpo){
+  if(!url||!DRIVE_URL_RE.test(url))throw new Error('La dirección de Drive no es válida');
   let r;
   try{
     // text/plain evita la comprobación previa de CORS, que Google Apps Script no admite
-    r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({clave:cfg.clave,accion},datos||{})),redirect:'follow'});
+    r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(cuerpo),redirect:'follow'});
   }catch(e){throw new Error('No hay conexión con Drive. Revisa tu internet')}
   let d;
   try{d=await r.json()}catch(e){throw new Error('Drive no respondió como se esperaba. Comprueba que la implementación tenga acceso para "Cualquier persona"')}
   if(!d||!d.ok)throw new Error((d&&d.error)||'Drive devolvió un error');
   return d;
 }
+async function driveCall(accion,datos){
+  const cfg=getDriveCfg();
+  if(!cfg.url||!cfg.clave)throw new Error(modoCuentas()?'Vuelve a entrar con tu usuario y contraseña':'Drive no está conectado. Hazlo en Ajustes → Drive compartido');
+  return postDrive(cfg.url,Object.assign({clave:cfg.clave,accion},datos||{}));
+}
+// Sin clave de Drive: solo para entrar con usuario y contraseña
+async function driveCallPublic(accion,datos){return postDrive(getDriveCfg().url,Object.assign({accion},datos||{}))}
 function renderDriveSettings(){
   const c=getDriveCfg();
+  document.getElementById('drive-auto').style.display=modoCuentas()?'block':'none';
+  document.getElementById('drive-manual').style.display=modoCuentas()?'none':'block';
+  if(modoCuentas()){document.getElementById('drive-status').textContent=c.clave?'✅ Conectado con tu cuenta':'⚠️ Vuelve a entrar con tu usuario y contraseña';return}
   document.getElementById('drive-url').value=c.url||'';
   const k=document.getElementById('drive-clave');k.value='';
   k.placeholder=c.clave?('Clave guardada (termina en '+c.clave.slice(-4)+'). Pega otra para cambiarla'):'Pega aquí la clave de la pestaña Conexión';
@@ -2036,6 +2112,17 @@ async function changePassword(){
   const cf=document.getElementById('pass-confirm').value;
   if(!old||!nw||!cf){showToast('Rellena todos los campos',true);return}
   if(nw!==cf){showToast('Las contraseñas no coinciden',true);return}
+  if(modoCuentas()){
+    if(nw.length<10){showToast('Mínimo 10 caracteres',true);return}
+    try{
+      const u=currentUser.username;
+      const ph=await huellaPass(u,old),nph=await huellaPass(u,nw);
+      await driveCall('usuarios.cambiarPass',{usuario:u,ph,nuevoPh:nph});
+      sesionPH=nph;
+    }catch(e){showToast(e.message,true);return}
+    document.getElementById('pass-old').value='';document.getElementById('pass-new').value='';document.getElementById('pass-confirm').value='';
+    showToast('Contraseña actualizada ✓');return;
+  }
   if(nw.length<8){showToast('Mínimo 8 caracteres',true);return}
   DB=getDB();const idx=DB.users.findIndex(u=>u.username===currentUser.username);
   if(idx<0){showToast('No se encuentra tu cuenta',true);return}
@@ -2049,8 +2136,23 @@ async function changePassword(){
 }
 
 // ══ ADMIN ══
-function renderUsers(){
-  DB=getDB();const list=document.getElementById('users-list');
+function cuentaAdmin(){return{usuario:currentUser.username,ph:sesionPH}}
+async function renderUsers(){
+  const list=document.getElementById('users-list');
+  if(modoCuentas()){
+    list.innerHTML='<div class="set-row-desc">Cargando…</div>';
+    try{adminLista=(await driveCall('usuarios.listar',{admin:cuentaAdmin()})).usuarios||[]}
+    catch(e){list.innerHTML='';showToast(e.message,true);return}
+    list.innerHTML=adminLista.map((u,i)=>`
+    <div class="user-item">
+      <div class="user-avatar">${esc(u.usuario.charAt(0).toUpperCase())}</div>
+      <div class="user-info"><div class="user-name">${esc(u.usuario)}${u.nombre?' · '+esc(u.nombre):''}</div><div class="user-meta">${[u.correo,u.telefono].filter(Boolean).map(esc).join(' · ')||'Sin datos de contacto'}${u.ultimo?' · último acceso '+esc(u.ultimo):''}</div></div>
+      <span class="role-badge role-${u.rol==='admin'?'admin':'user'}">${u.rol==='admin'?'Admin':'Usuario'}</span>
+      ${u.usuario!==currentUser.username?`<button class="btn btn-sm btn-red" onclick="promptDeleteUser(${i},null)">Borrar</button>`:'<span style="font-size:11px;color:var(--text3)">Tú</span>'}
+    </div>`).join('');
+    return;
+  }
+  DB=getDB();
   list.innerHTML=DB.users.map((u,i)=>`
     <div class="user-item">
       <div class="user-avatar">${u.username.charAt(0).toUpperCase()}</div>
@@ -2065,6 +2167,18 @@ async function addUser(){
   const role=document.getElementById('new-role').value==='admin'?'admin':'user';
   if(!username||!password){showToast('Rellena usuario y contraseña',true);return}
   if(!validUsername(username)){showToast('Usuario: 3 a 20 letras, números, punto, guion o guion bajo',true);return}
+  if(modoCuentas()){
+    if(password.length<10){showToast('Mínimo 10 caracteres',true);return}
+    try{
+      const ph=await huellaPass(username,password);
+      await driveCall('usuarios.crear',{admin:cuentaAdmin(),nuevo:{usuario:username,ph,rol:role,
+        nombre:document.getElementById('new-nombre').value.trim(),correo:document.getElementById('new-correo').value.trim(),
+        telefono:document.getElementById('new-tel').value.trim(),direccion:document.getElementById('new-dir').value.trim()}});
+    }catch(e){showToast(e.message,true);return}
+    ['new-user','new-pass','new-nombre','new-correo','new-tel','new-dir'].forEach(id=>document.getElementById(id).value='');
+    renderUsers();showToast(`Usuario "${username}" creado ✓`);
+    return;
+  }
   if(password.length<8){showToast('Mínimo 8 caracteres',true);return}
   DB=getDB();if(DB.users.find(u=>u.username===username)){showToast('Ese usuario ya existe',true);return}
   const h=await hashPass(password);
@@ -2073,8 +2187,22 @@ async function addUser(){
   document.getElementById('new-user').value='';document.getElementById('new-pass').value='';
   renderUsers();showToast(`Usuario "${username}" creado ✓`);
 }
-function promptDeleteUser(idx,name){userToDelete=idx;document.getElementById('mdu-text').textContent=`¿Eliminar a "${name}"? No se puede deshacer.`;openModal('modal-del-user')}
-function confirmDeleteUser(){if(userToDelete===null)return;DB=getDB();DB.users.splice(userToDelete,1);saveDB(DB);userToDelete=null;closeModal('modal-del-user');renderUsers();showToast('Usuario eliminado')}
+function promptDeleteUser(idx,name){
+  userToDelete=idx;
+  const n=modoCuentas()?(adminLista[idx]||{}).usuario:name;
+  document.getElementById('mdu-text').textContent=`¿Eliminar a "${n}"? No se puede deshacer.`;openModal('modal-del-user');
+}
+async function confirmDeleteUser(){
+  if(userToDelete===null)return;
+  if(modoCuentas()){
+    const u=adminLista[userToDelete];userToDelete=null;closeModal('modal-del-user');
+    if(!u)return;
+    try{await driveCall('usuarios.borrar',{admin:cuentaAdmin(),usuario:u.usuario});showToast('Usuario eliminado')}
+    catch(e){showToast(e.message,true)}
+    renderUsers();return;
+  }
+  DB=getDB();DB.users.splice(userToDelete,1);saveDB(DB);userToDelete=null;closeModal('modal-del-user');renderUsers();showToast('Usuario eliminado');
+}
 
 // ══ MODALS ══
 function openModal(id){document.getElementById(id).classList.add('open')}

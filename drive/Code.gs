@@ -12,21 +12,28 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '1.1';
+var VERSION = '2.0';
 
 var COLS = {
   'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA 21%', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas'],
   'Partidas': ['ID presupuesto', 'Capítulo', 'Subcapítulo', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'Precio unitario', 'Importe'],
   'Preciario': ['Descripción', 'Unidad', 'Precio', 'Capítulo', 'Zona', 'Autor', 'Modificado'],
-  'Empresa': ['Clave', 'Valor']
+  'Empresa': ['Clave', 'Valor'],
+  'Usuarios': ['Usuario', 'Nombre', 'Correo', 'Teléfono', 'Dirección', 'Rol', 'Creado', 'Último acceso'],
+  'Accesos': ['Fecha y hora', 'Usuario', 'Resultado', 'Dispositivo (lo declara el navegador)', 'Detalle']
 };
 // Columnas (empezando en 1) que son texto plano: así Sheets no convierte fechas ni fórmulas
 var TEXTO = {
   'Presupuestos': [1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15, 16],
   'Partidas': [1, 2, 3, 4, 5, 7],
   'Preciario': [1, 2, 4, 5, 6, 7],
-  'Empresa': [1, 2]
+  'Empresa': [1, 2],
+  'Usuarios': [1, 2, 3, 4, 5, 6, 7, 8],
+  'Accesos': [1, 2, 3, 4, 5]
 };
+var PUBLICAS = ['auth.estado', 'auth.login'];
+var MAX_FALLOS = 5;        // intentos fallidos seguidos…
+var BLOQUEO_SEG = 900;     // …y se bloquea ese usuario 15 minutos
 var ESTADOS = ['Borrador', 'Enviado', 'Aceptado', 'Rechazado'];
 var CLAVES_EMPRESA = ['nombre', 'nif', 'dir', 'tel', 'email', 'web', 'validez', 'cond'];
 
@@ -87,7 +94,8 @@ function doPost(e) {
     var texto = (e && e.postData && e.postData.contents) || '';
     if (texto.length > 30000000) throw new Error('Petición demasiado grande');
     var req = JSON.parse(texto);
-    if (!claveValida(req.clave)) return salida({ ok: false, error: 'La clave no es correcta' });
+    var publica = PUBLICAS.indexOf(req.accion) >= 0;   // entrar con usuario y contraseña no necesita la clave de Drive
+    if (!publica && !claveValida(req.clave)) return salida({ ok: false, error: 'La clave no es correcta' });
     var lock = LockService.getScriptLock();
     try { lock.waitLock(25000); } catch (x) { throw new Error('Drive está ocupado, inténtalo de nuevo en unos segundos'); }
     try { res = despachar(req); } finally { lock.releaseLock(); }
@@ -122,6 +130,13 @@ function despachar(req) {
     case 'preciario.guardar': return preciarioGuardar(ss, req);
     case 'empresa.leer': return empresaLeer(ss);
     case 'empresa.guardar': return empresaGuardar(ss, req);
+    case 'auth.estado': return authEstado();
+    case 'auth.login': return authLogin(ss, req);
+    case 'auth.setup': return authSetup(ss, req);
+    case 'usuarios.listar': return usuariosListar(ss, req);
+    case 'usuarios.crear': return usuariosCrear(ss, req);
+    case 'usuarios.borrar': return usuariosBorrar(ss, req);
+    case 'usuarios.cambiarPass': return usuariosCambiarPass(ss, req);
     case 'ia.leer': return iaLeer();
     case 'ia.guardar': return iaGuardar(req);
     default: throw new Error('Acción desconocida');
@@ -376,4 +391,184 @@ function iaGuardar(req) {
   p.setProperty('GEMINI_KEY', key);
   if (modelo) p.setProperty('GEMINI_MODELO', modelo); else p.deleteProperty('GEMINI_MODELO');
   return { ok: true, compartida: true };
+}
+
+// ───────────────────────── Cuentas de usuario ─────────────────────────
+// La contraseña NUNCA llega al script: la web la convierte antes en una huella lenta (PBKDF2, 100.000 vueltas)
+// y aquí solo se guarda otra huella de esa huella, con sal. Las huellas viven en las propiedades del script
+// (no en la hoja): quien abra la hoja no las ve. La pestaña Usuarios solo muestra datos de contacto.
+
+function usuariosLeer() {
+  var s = PropertiesService.getScriptProperties().getProperty('USUARIOS');
+  try { return s ? JSON.parse(s) : {}; } catch (e) { return {}; }
+}
+function usuariosGuardar(o) { PropertiesService.getScriptProperties().setProperty('USUARIOS', JSON.stringify(o)); }
+
+function usuarioNorm(u) {
+  u = String(u || '').trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,20}$/.test(u)) throw new Error('Usuario: de 3 a 20 letras, números, punto, guion o guion bajo');
+  return u;
+}
+function huellaValida(ph) {
+  ph = String(ph || '');
+  if (!/^[0-9a-f]{64}$/.test(ph)) throw new Error('Contraseña no válida');
+  return ph;
+}
+function hex(bytes) {
+  return bytes.map(function (b) { return ('0' + ((b < 0 ? b + 256 : b)).toString(16)).slice(-2); }).join('');
+}
+function huellaServidor(salt, ph) {
+  return hex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + ph, Utilities.Charset.UTF_8));
+}
+function iguales(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  var d = 0;
+  for (var i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+function registrarAcceso(ss, usuario, resultado, req, detalle) {
+  try {
+    var h = hoja(ss, 'Accesos');
+    var ua = t(req && req.dispositivo, 160);
+    var fila = [[t(ahora(ss), 20), t(usuario, 40), t(resultado, 20), ua, t(detalle, 200)]];
+    var r = h.getLastRow() + 1;
+    if (r > h.getMaxRows()) h.insertRowsAfter(h.getMaxRows(), 100);
+    var rg = h.getRange(r, 1, 1, 5);
+    rg.setNumberFormats([['@', '@', '@', '@', '@']]);
+    rg.setValues(fila);
+    if (h.getLastRow() > 5000) h.deleteRows(2, 500);   // se guardan los últimos accesos
+  } catch (e) { /* el registro nunca debe impedir entrar */ }
+}
+
+function espejoUsuarios(ss) {
+  var us = usuariosLeer();
+  var h = hoja(ss, 'Usuarios');
+  var antes = Math.max(0, h.getLastRow() - 1);
+  var filas = Object.keys(us).sort().map(function (k) {
+    var u = us[k];
+    // el teléfono ya está validado (solo cifras y + ( ) . - espacio), así que no necesita la guardia de fórmulas y conserva su +
+    return [t(k, 20), t(u.nombre, 80), t(u.correo, 100), String(u.telefono || '').slice(0, 30), t(u.direccion, 150), u.rol === 'admin' ? 'Admin' : 'Usuario', t(u.creado, 20), t(u.ultimo, 20)];
+  });
+  escribirTodo(h, 'Usuarios', filas, antes);
+}
+
+function perfil(u) {
+  return { nombre: u.nombre || '', correo: u.correo || '', telefono: u.telefono || '', direccion: u.direccion || '' };
+}
+function limpiarPerfil(p) {
+  p = p || {};
+  var correo = String(p.correo || '').trim().slice(0, 100);
+  if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) throw new Error('El correo no parece válido');
+  var tel = String(p.telefono || '').trim().slice(0, 30);
+  if (tel && !/^[0-9 +().-]{6,30}$/.test(tel)) throw new Error('El teléfono no parece válido');
+  return { nombre: String(p.nombre || '').trim().slice(0, 80), correo: correo, telefono: tel, direccion: String(p.direccion || '').trim().slice(0, 150) };
+}
+
+function authEstado() {
+  return { ok: true, configurado: Object.keys(usuariosLeer()).length > 0 };
+}
+
+// Comprueba usuario + huella con bloqueo tras varios fallos. Devuelve la ficha del usuario o lanza error.
+function verificar(ss, usuario, ph, req, accionLog) {
+  var u = usuarioNorm(usuario);
+  ph = huellaValida(ph);
+  var cache = CacheService.getScriptCache();
+  var k = 'fallos:' + u;
+  var fallos = Number(cache.get(k) || 0);
+  if (fallos >= MAX_FALLOS) {
+    registrarAcceso(ss, u, 'Bloqueado', req, 'Demasiados intentos seguidos');
+    throw new Error('Demasiados intentos. Espera 15 minutos y vuelve a probar');
+  }
+  var us = usuariosLeer();
+  var f = us[u];
+  var ok = !!f && iguales(huellaServidor(f.salt, ph), f.hash);
+  if (!ok) {
+    cache.put(k, String(fallos + 1), BLOQUEO_SEG);
+    registrarAcceso(ss, u, 'Fallo', req, accionLog || 'Usuario o contraseña incorrectos');
+    throw new Error('Usuario o contraseña incorrectos');
+  }
+  cache.remove(k);
+  return { usuario: u, ficha: f, todos: us };
+}
+
+function authLogin(ss, req) {
+  var v = verificar(ss, req.usuario, req.ph, req, '');
+  v.ficha.ultimo = ahora(ss);
+  v.todos[v.usuario] = v.ficha;
+  usuariosGuardar(v.todos);
+  try { espejoUsuarios(ss); } catch (e) {}
+  registrarAcceso(ss, v.usuario, 'Correcto', req, '');
+  return { ok: true, usuario: v.usuario, rol: v.ficha.rol === 'admin' ? 'admin' : 'user', perfil: perfil(v.ficha),
+    clave: PropertiesService.getScriptProperties().getProperty('CLAVE') };
+}
+
+// La primera cuenta (administrador) solo se puede crear con la clave de Drive y mientras no haya ninguna
+function authSetup(ss, req) {
+  var us = usuariosLeer();
+  if (Object.keys(us).length > 0) throw new Error('Ya hay cuentas creadas. Pide al administrador que cree la tuya');
+  var u = usuarioNorm(req.usuario);
+  var ph = huellaValida(req.ph);
+  var salt = Utilities.getUuid().replace(/-/g, '');
+  var ficha = limpiarPerfil(req.perfil);
+  ficha.salt = salt; ficha.hash = huellaServidor(salt, ph); ficha.rol = 'admin'; ficha.creado = ahora(ss);
+  us[u] = ficha;
+  usuariosGuardar(us);
+  espejoUsuarios(ss);
+  registrarAcceso(ss, u, 'Alta', req, 'Primer administrador');
+  return { ok: true };
+}
+
+function exigirAdmin(ss, req) {
+  var a = req.admin || {};
+  var v = verificar(ss, a.usuario, a.ph, req, 'Comprobación de administrador');
+  if (v.ficha.rol !== 'admin') throw new Error('Solo un administrador puede hacer esto');
+  return v;
+}
+
+function usuariosListar(ss, req) {
+  var v = exigirAdmin(ss, req);
+  return { ok: true, usuarios: Object.keys(v.todos).sort().map(function (k) {
+    var f = v.todos[k];
+    return { usuario: k, rol: f.rol === 'admin' ? 'admin' : 'user', nombre: f.nombre || '', correo: f.correo || '', telefono: f.telefono || '', direccion: f.direccion || '', ultimo: f.ultimo || '' };
+  }) };
+}
+
+function usuariosCrear(ss, req) {
+  var v = exigirAdmin(ss, req);
+  var q = req.nuevo || {};
+  var u = usuarioNorm(q.usuario);
+  if (v.todos[u]) throw new Error('Ese usuario ya existe');
+  var ph = huellaValida(q.ph);
+  var ficha = limpiarPerfil(q);
+  var salt = Utilities.getUuid().replace(/-/g, '');
+  ficha.salt = salt; ficha.hash = huellaServidor(salt, ph); ficha.rol = q.rol === 'admin' ? 'admin' : 'user'; ficha.creado = ahora(ss);
+  v.todos[u] = ficha;
+  usuariosGuardar(v.todos);
+  espejoUsuarios(ss);
+  registrarAcceso(ss, v.usuario, 'Alta', req, 'Creó la cuenta de ' + u);
+  return { ok: true };
+}
+
+function usuariosBorrar(ss, req) {
+  var v = exigirAdmin(ss, req);
+  var u = usuarioNorm(req.usuario);
+  if (u === v.usuario) throw new Error('No puedes borrar tu propia cuenta');
+  if (!v.todos[u]) throw new Error('Ese usuario no existe');
+  delete v.todos[u];
+  usuariosGuardar(v.todos);
+  espejoUsuarios(ss);
+  registrarAcceso(ss, v.usuario, 'Baja', req, 'Borró la cuenta de ' + u);
+  return { ok: true };
+}
+
+function usuariosCambiarPass(ss, req) {
+  var v = verificar(ss, req.usuario, req.ph, req, 'Cambio de contraseña');
+  var nuevo = huellaValida(req.nuevoPh);
+  var salt = Utilities.getUuid().replace(/-/g, '');
+  v.ficha.salt = salt; v.ficha.hash = huellaServidor(salt, nuevo);
+  v.todos[v.usuario] = v.ficha;
+  usuariosGuardar(v.todos);
+  registrarAcceso(ss, v.usuario, 'Cambio', req, 'Cambió su contraseña');
+  return { ok: true };
 }
