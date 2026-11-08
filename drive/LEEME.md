@@ -54,7 +54,11 @@ Puedes abrir la hoja en Google Sheets, o descargarla como Excel (Archivo → Des
 3. Debe salir "✅ Conexión con Drive correcta".
 
 ### 6. Lou
-Lou abre la hoja compartida, copia la URL y la clave de la pestaña **Conexión** y las pega en **su** Ajustes → Drive compartido (en su móvil u ordenador).
+En tu web: **Ajustes → Drive compartido → 🔗 Copiar enlace de acceso para Lou**. Mándaselo **solo a ella**, por un chat privado. Cuando lo abra en su móvil u ordenador, se conecta a Drive sin pegar nada, y solo tiene que crear su usuario y contraseña en ese dispositivo.
+
+Después, todo esto le llega solo desde Drive: presupuestos, preciario y datos de la empresa (menos el logo, que es de cada dispositivo). Si quieres que tampoco tenga que pegar la clave de Gemini, en **Ajustes → IA** pulsa **☁️ Compartir esta clave por Drive** (necesita el script actualizado, ver abajo).
+
+Quien tenga ese enlace entra en vuestros datos. Si se filtra, ejecuta `nuevaClave` (ver Seguridad).
 
 ## El preciario compartido
 - En cada partida de un presupuesto hay un botón **📚 Guardar en preciario**, y abajo uno para guardar **todas** las partidas ya revisadas. Revisa los precios antes: si la partida ya existe, se actualiza.
@@ -70,5 +74,12 @@ Lou abre la hoja compartida, copia la URL y la clave de la pestaña **Conexión*
 - Si la clave se filtra: en Apps Script ejecuta **`nuevaClave`**. La anterior deja de valer; copia la nueva de la pestaña Conexión y pégala en la web.
 - La clave se guarda solo en el navegador de cada uno, nunca en GitHub.
 
-## Si cambias el script más adelante
+## Actualizar el script
+Cuando salga una versión nueva de `drive/Code.gs` (esta añade compartir la clave de Gemini):
+1. En Apps Script, borra todo el código y pega el nuevo (**Copy raw file** en GitHub). Guarda con el disquete.
+2. **Implementar → Gestionar implementaciones** → lápiz ✏ → **Versión: Nueva versión** → **Implementar**.
+
+La clave de acceso y los datos no se tocan, y la URL no cambia.
+
+## Detalle del cambio de versión
 **Implementar → Gestionar implementaciones** → lápiz ✏ → **Versión: Nueva versión** → **Implementar**. La URL no cambia.

@@ -12,7 +12,7 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '1.0';
+var VERSION = '1.1';
 
 var COLS = {
   'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA 21%', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas'],
@@ -122,6 +122,8 @@ function despachar(req) {
     case 'preciario.guardar': return preciarioGuardar(ss, req);
     case 'empresa.leer': return empresaLeer(ss);
     case 'empresa.guardar': return empresaGuardar(ss, req);
+    case 'ia.leer': return iaLeer();
+    case 'ia.guardar': return iaGuardar(req);
     default: throw new Error('Acción desconocida');
   }
 }
@@ -349,4 +351,29 @@ function empresaGuardar(ss, req) {
   var filas = CLAVES_EMPRESA.map(function (k) { return [k, t(d[k], k === 'cond' ? 800 : 150)]; });
   escribirTodo(h, 'Empresa', filas, antes);
   return { ok: true };
+}
+
+// ───────────────────────── Clave de Gemini compartida (opcional) ─────────────────────────
+// Se guarda en las propiedades del script, NO en la hoja: no se ve al abrir la hoja,
+// solo la devuelve el script a quien tenga la clave de acceso.
+
+function iaLeer() {
+  var p = PropertiesService.getScriptProperties();
+  return { ok: true, key: p.getProperty('GEMINI_KEY') || '', modelo: p.getProperty('GEMINI_MODELO') || '' };
+}
+
+function iaGuardar(req) {
+  var p = PropertiesService.getScriptProperties();
+  var key = String(req.key || '').trim();
+  var modelo = String(req.modelo || '').trim();
+  if (!key) {
+    p.deleteProperty('GEMINI_KEY');
+    p.deleteProperty('GEMINI_MODELO');
+    return { ok: true, compartida: false };
+  }
+  if (!/^[\x21-\x7E]{20,200}$/.test(key)) throw new Error('La clave de Gemini no parece válida');
+  if (modelo && !/^[a-z0-9._-]{3,60}$/.test(modelo)) throw new Error('Nombre de modelo no válido');
+  p.setProperty('GEMINI_KEY', key);
+  if (modelo) p.setProperty('GEMINI_MODELO', modelo); else p.deleteProperty('GEMINI_MODELO');
+  return { ok: true, compartida: true };
 }

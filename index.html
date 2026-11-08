@@ -548,6 +548,8 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button class="btn btn-sec" onclick="testDrive()">Probar conexión</button>
         <button class="btn btn-outline" onclick="clearDriveSettings()">Desconectar</button>
       </div>
+      <button class="btn btn-sec" style="margin-top:10px" onclick="copyAccessLink()">🔗 Copiar enlace de acceso para Lou</button>
+      <div class="set-row-desc" style="margin-top:8px">Mándaselo solo a ella, por un chat privado. Quien tenga ese enlace entra en vuestros datos. Al abrirlo, su dispositivo se conecta a Drive sin pegar nada.</div>
       <div class="set-row-desc" id="drive-status" style="margin:12px 0 0"></div>
     </div>
     <div class="set-title">Datos de la empresa (para el PDF)</div>
@@ -584,6 +586,11 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button class="btn btn-sec" onclick="testAI()">Probar conexión</button>
         <button class="btn btn-outline" onclick="clearAiKey()">Borrar clave</button>
       </div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-sec" onclick="shareAiKey()">☁️ Compartir esta clave por Drive</button>
+        <button class="btn btn-outline" onclick="unshareAiKey()">Dejar de compartir</button>
+      </div>
+      <div class="set-row-desc" style="margin-top:8px">Si la compartes, Lou no tendrá que pegar ninguna clave: se descarga sola desde Drive. Compartís la misma cuota gratuita de Gemini.</div>
       <div class="set-row-desc" id="ai-status" style="margin:12px 0 0"></div>
     </div>
     <div class="set-title">Cambiar contraseña</div>
@@ -770,6 +777,24 @@ async function unlockWithDrive(){
   btn.disabled=false;btn.textContent='Comprobar y entrar →';
 }
 document.getElementById('gate-clave').addEventListener('keydown',e=>{if(e.key==='Enter')unlockWithDrive()});
+// Enlace de acceso: https://…/#acceso=<datos>. La parte tras # nunca viaja a ningún servidor y se borra de la barra al abrirlo
+function accessLinkData(){
+  const c=getDriveCfg();if(!c.url||!c.clave)return null;
+  return btoa(JSON.stringify({u:c.url,k:c.clave})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function openAccessLink(){
+  const h=location.hash||'';
+  if(!h.startsWith('#acceso='))return;
+  const raw=h.slice(8);
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+  if(driveConectado())return;
+  try{
+    const o=JSON.parse(atob(raw.replace(/-/g,'+').replace(/_/g,'/')));
+    if(typeof o.u!=='string'||typeof o.k!=='string')throw 0;
+    document.getElementById('gate-url').value=o.u;document.getElementById('gate-clave').value=o.k;
+  }catch(e){showLoginError('El enlace de acceso no es válido. Pide uno nuevo');return}
+  await unlockWithDrive();
+}
 function showLoginError(msg){
   const e=document.getElementById('li-err');
   e.textContent='❌ '+msg;e.style.display='block';
@@ -810,6 +835,7 @@ function enterApp(found){
   document.getElementById('set-role').textContent=found.role==='admin'?'Administrador':'Usuario';
   document.getElementById('admin-section').style.display=found.role==='admin'?'block':'none';
   showTab('nuevo');
+  syncShared();
 }
 function doLogout(){
   currentUser=null;
@@ -834,7 +860,7 @@ function showTab(name){
   if(name==='historial'){renderHistory();renderDriveHistory()}
   if(name==='preciario')renderPreciario();
   if(name==='admin')renderUsers();
-  if(name==='ajustes'){renderAiSettings();renderEmpresaSettings();renderDriveSettings()}
+  if(name==='ajustes'){renderAiSettings();renderEmpresaSettings();renderDriveSettings();syncShared().then(()=>{const f=document.activeElement;if(document.getElementById('tab-ajustes').style.display!=='none'&&!(f&&/^(emp|ai)-/.test(f.id||''))){renderAiSettings();renderEmpresaSettings()}})}
 }
 
 // ══ STEPS ══
@@ -1176,6 +1202,7 @@ async function generateBudget(){
   const desc=currentInputMode==='audio'?audioText:textInput;
 
   if(!desc&&uploadedPhotos.length===0){showToast('Añade fotos o una descripción en el paso 2',true);goStep(2);return}
+  if(!getAI().key&&driveConectado()){try{await pullAiShared()}catch(e){console.error(e.message)}}
   if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);showTab('ajustes');return}
 
   // Preciario (si Drive está conectado, se refresca primero; si falla se usa la copia de este dispositivo)
@@ -1396,6 +1423,60 @@ function saveDriveSettings(){
   try{localStorage.setItem('pia_drive',JSON.stringify(c))}catch(e){showToast('No se pudo guardar en este navegador',true);return}
   renderDriveSettings();showToast('Guardado ✓');
 }
+async function copyAccessLink(){
+  const d=accessLinkData();
+  if(!d){showToast('Primero conecta Drive en este dispositivo',true);return}
+  const link=location.origin+location.pathname+'#acceso='+d;
+  try{await navigator.clipboard.writeText(link);showToast('Enlace copiado. Mándaselo a Lou por un chat privado')}
+  catch(e){window.prompt('Copia este enlace y mándaselo a Lou por un chat privado:',link)}
+}
+function scriptViejo(e){return /Acci[oó]n desconocida/.test(e.message)?new Error('El script de Drive es antiguo. Actualízalo (ver drive/LEEME.md, "Actualizar el script")'):e}
+async function shareAiKey(){
+  const a=getAI();
+  if(!a.key){showToast('Primero guarda tu clave de Gemini',true);return}
+  if(!driveConectado()){showToast('Primero conecta Drive',true);return}
+  if(a.shared){showToast('Esta clave ya viene de Drive. Compártela desde el dispositivo donde la pegaste',true);return}
+  try{await driveCall('ia.guardar',{key:a.key,modelo:a.model||''});showToast('Clave compartida por Drive ✓')}
+  catch(e){showToast(scriptViejo(e).message,true)}
+}
+async function unshareAiKey(){
+  if(!driveConectado()){showToast('Primero conecta Drive',true);return}
+  try{await driveCall('ia.guardar',{key:''});showToast('Dejaste de compartir la clave. En el dispositivo de Lou se quitará sola')}
+  catch(e){showToast(scriptViejo(e).message,true)}
+}
+// Trae de Drive la clave de Gemini compartida y los datos de la empresa (en silencio: si falla, se usa lo local)
+async function pullAiShared(){
+  const r=await driveCall('ia.leer');
+  const a=getAI();
+  if(r.key){
+    if(!a.key||a.shared){saveAI(Object.assign({},a,{key:r.key,model:r.modelo||'',shared:true}))}
+  }else if(a.shared){
+    delete a.key;delete a.shared;saveAI(a);
+  }
+}
+async function pullEmpresa(){
+  const r=await driveCall('empresa.leer');
+  const d=r.datos||{};
+  const local=getEmpresa();
+  if(!d.nombre){
+    // Drive aún no tiene datos: se suben los de este dispositivo si los hay
+    if(local.nombre)await pushEmpresa(local);
+    return;
+  }
+  const m=Object.assign({},local);
+  ['nombre','nif','dir','tel','email','web','cond'].forEach(k=>{m[k]=String(d[k]||'')});
+  m.validez=Math.min(365,Math.max(1,parseInt(d.validez)||30));
+  try{localStorage.setItem('pia_empresa',JSON.stringify(m))}catch(e){}
+}
+async function pushEmpresa(e){
+  const datos={};['nombre','nif','dir','tel','email','web','cond','validez'].forEach(k=>{datos[k]=e[k]==null?'':String(e[k])});
+  await driveCall('empresa.guardar',{datos});
+}
+async function syncShared(){
+  if(!driveConectado())return;
+  try{await pullEmpresa()}catch(e){console.error(e.message)}
+  try{await pullAiShared()}catch(e){console.error(e.message)}
+}
 function clearDriveSettings(){
   try{localStorage.removeItem('pia_drive')}catch(e){}
   renderDriveSettings();showToast('Drive desconectado en este navegador');
@@ -1534,13 +1615,16 @@ function onEmpLogo(input){
   img.src=url;
 }
 function removeEmpLogo(){empLogoState=null;showEmpLogo()}
-function saveEmpresa(){
+async function saveEmpresa(){
   const val=id=>(document.getElementById(id).value||'').trim();
   const validez=Math.min(365,Math.max(1,parseInt(document.getElementById('emp-validez').value)||30));
   const e={nombre:val('emp-nombre'),nif:val('emp-nif'),dir:val('emp-dir'),tel:val('emp-tel'),email:val('emp-email'),web:val('emp-web'),cond:val('emp-cond'),validez};
   if(empLogoState){e.logo=empLogoState.data;e.logoW=empLogoState.w;e.logoH=empLogoState.h}
-  try{localStorage.setItem('pia_empresa',JSON.stringify(e));showToast('Datos de empresa guardados ✓')}
-  catch(err){showToast('No se pudo guardar (almacenamiento lleno). Prueba con un logo más pequeño',true)}
+  try{localStorage.setItem('pia_empresa',JSON.stringify(e))}
+  catch(err){showToast('No se pudo guardar (almacenamiento lleno). Prueba con un logo más pequeño',true);return}
+  if(!driveConectado()){showToast('Datos de empresa guardados ✓ (solo en este dispositivo)');return}
+  try{await pushEmpresa(e);showToast('Datos de empresa guardados y compartidos por Drive ✓ (el logo es solo de este dispositivo)')}
+  catch(err){showToast('Guardado aquí, pero no en Drive: '+scriptViejo(err).message,true)}
 }
 function syncPdfFields(){
   if(!generatedData)return;
@@ -2030,6 +2114,7 @@ function showToast(msg,isErr=false){
 // Init
 renderMediciones();
 refreshLoginMode();
+openAccessLink();
 </script>
 </body>
 </html>
