@@ -470,6 +470,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button class="btn" onclick="downloadPDF()">📄 Descargar PDF</button>
         <button class="btn btn-sec" id="share-pdf-btn" style="display:none" onclick="sharePDF()">📤 Compartir PDF</button>
         <button class="btn btn-green" onclick="saveToDrive()">☁️ Guardar en Drive</button>
+        <button class="btn btn-green" onclick="saveAllToPreciario()">📚 Guardar todas las partidas en el preciario</button>
         <button class="btn btn-purple" onclick="saveToHistory()">💾 Guardar en historial</button>
         <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar texto</button>
         <button class="btn btn-sec" onclick="resetForm()">➕ Nuevo presupuesto</button>
@@ -510,8 +511,10 @@ audio{width:100%;margin-top:14px;border-radius:8px}
           <option>JARDINERÍA</option><option>VARIOS</option>
         </select>
       </div>
+      <div class="field"><label>Zona (opcional)</label><input type="text" id="prec-zona" maxlength="60" placeholder="Ej: Barcelona, Girona… (vacío = vale para todas)" autocomplete="off"></div>
       <button class="btn btn-green" onclick="addPreciario()">Añadir al preciario</button>
     </div>
+    <div class="info-box" id="prec-status" style="margin-bottom:12px"></div>
     <div id="prec-list"></div>
   </div>
 
@@ -1139,10 +1142,12 @@ async function generateBudget(){
   if(!desc&&uploadedPhotos.length===0){showToast('Añade fotos o una descripción en el paso 2',true);goStep(2);return}
   if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);showTab('ajustes');return}
 
-  // Preciario
-  const precItems=DB.preciario||[];
+  // Preciario (si Drive está conectado, se refresca primero; si falla se usa la copia de este dispositivo)
+  if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
+  DB=getDB();
+  const precItems=(DB.preciario||[]).slice(-200);
   let precCtx='';
-  if(precItems.length>0){precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan):\n';precItems.forEach(p=>{precCtx+=`- ${p.desc} | ${p.unit} | ${p.price}€ | ${p.cap}\n`})}
+  if(precItems.length>0){precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si lleva zona, solo vale para esa zona):\n';precItems.forEach(p=>{precCtx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
 
   // Mediciones
   let medCtx='';
@@ -1220,6 +1225,7 @@ function renderResults(data){
             </div>
             <div class="p-total-badge" id="${id}-total">${fmtEUR(t)}</div>
           </div>
+          <button class="btn btn-sm btn-sec" style="margin-top:8px;padding:6px 12px;font-size:13px" id="${id}-prec" onclick="savePartidaToPreciario('${id}')">📚 Guardar en preciario</button>
         </div>`;
       });
       sh+=`<div class="sub-block"><div class="sub-title">📁 ${esc(sub.nombre)}</div>${sx}</div>`;
@@ -1798,27 +1804,110 @@ function deleteFromHistory(){
 }
 
 // ══ PRECIARIO ══
-function addPreciario(){
+// Con Drive conectado, el preciario compartido (pestaña Preciario de la hoja) manda.
+// Aquí se guarda una copia para trabajar sin conexión.
+function precKey(p){const n=x=>String(x||'').trim().toLowerCase().replace(/\s+/g,' ');return n(p.desc)+'|'+n(p.unit)+'|'+n(p.zona)}
+function precToDrive(p){return{descripcion:p.desc,unidad:p.unit,precio:p.price,capitulo:p.cap,zona:p.zona||'',autor:currentUser?currentUser.username:''}}
+function precFromDrive(q){return{id:newId(),desc:String(q.descripcion||''),unit:String(q.unidad||''),price:Number(q.precio)||0,cap:String(q.capitulo||''),zona:String(q.zona||''),s:1}}
+let precMsg='';
+// Baja el preciario de Drive; lo que solo estaba en este dispositivo se sube antes para no perderlo
+async function syncPreciario(){
+  const d=await driveCall('preciario.listar');
+  const remoto=(d.items||[]).map(precFromDrive).filter(p=>p.desc&&p.price>0);
+  DB=getDB();DB.preciario=DB.preciario||[];
+  const claves=new Set(remoto.map(precKey));
+  // Lo que ya estuvo en Drive y ya no está se borró a propósito allí: no se vuelve a subir
+  const soloLocal=DB.preciario.filter(p=>p.desc&&p.price>0&&!p.s&&!claves.has(precKey(p)));
+  if(soloLocal.length){
+    await driveCall('preciario.guardar',{items:soloLocal.slice(0,500).map(precToDrive)});
+    soloLocal.forEach(p=>{p.id=p.id||newId();p.s=1;remoto.push(p)});
+  }
+  DB.preciario=remoto;saveDB(DB);
+  return remoto.length;
+}
+async function pushPreciario(items){
+  // Devuelve true si se guardó también en Drive
+  if(!driveConectado())return false;
+  await driveCall('preciario.guardar',{items:items.map(precToDrive)});
+  return true;
+}
+function addPrecLocal(items){
+  DB=getDB();DB.preciario=DB.preciario||[];
+  const pos={};DB.preciario.forEach((p,i)=>pos[precKey(p)]=i);
+  let nuevas=0,act=0;
+  items.forEach(it=>{
+    const k=precKey(it);
+    if(pos[k]!==undefined){DB.preciario[pos[k]]=Object.assign({},DB.preciario[pos[k]],it,{id:DB.preciario[pos[k]].id});act++}
+    else{pos[k]=DB.preciario.length;DB.preciario.push(Object.assign({id:newId()},it));nuevas++}
+  });
+  saveDB(DB);return{nuevas,act};
+}
+async function savePrecItems(items){
+  const r=addPrecLocal(items);
+  let drive='';
+  try{drive=(await pushPreciario(items))?' y en Drive':''}
+  catch(e){showToast('Guardado solo en este dispositivo. Drive falló: '+e.message,true);return r}
+  showToast(`Preciario${drive}: ${r.nuevas} nuevas, ${r.act} actualizadas ✓`);
+  return r;
+}
+async function addPreciario(){
   const desc=document.getElementById('prec-desc').value.trim();
   const price=parseFloat(document.getElementById('prec-price').value);
   const unit=document.getElementById('prec-unit').value;
   const cap=document.getElementById('prec-cap').value;
-  if(!desc||!price){showToast('Rellena descripción y precio',true);return}
-  DB=getDB();DB.preciario=DB.preciario||[];
-  DB.preciario.push({id:Date.now(),desc,price,unit,cap});saveDB(DB);
+  const zona=document.getElementById('prec-zona').value.trim();
+  if(!desc||!(price>0)){showToast('Rellena descripción y un precio mayor que 0',true);return}
+  await savePrecItems([{desc,price,unit,cap,zona}]);
   document.getElementById('prec-desc').value='';document.getElementById('prec-price').value='';
-  renderPreciario();showToast('Partida añadida ✓');
+  renderPreciario();
 }
-function renderPreciario(){
-  DB=getDB();const list=document.getElementById('prec-list');
-  if(!DB.preciario||DB.preciario.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Preciario vacío</div><div class="empty-sub">Añade tus partidas habituales con precios reales</div></div>`;return}
+function partidasDeDatos(){
+  const out=[];
+  ((generatedData&&generatedData.capitulos)||[]).forEach((cap,ci)=>(cap.subcapitulos||[]).forEach((sub,si)=>(sub.partidas||[]).forEach((p,pi)=>{
+    if(p._del)return;
+    out.push({id:`p_${ci}_${si}_${pi}`,item:{desc:String(p.descripcion||'').trim(),unit:String(p.unidad||'').trim(),price:Number(p.precio_unitario)||0,cap:String(cap.nombre||'').trim(),zona:''}});
+  })));
+  return out;
+}
+function marcarGuardada(id){
+  const b=document.getElementById(id+'-prec');
+  if(b){b.textContent='✓ En el preciario';b.disabled=true}
+}
+async function savePartidaToPreciario(id){
+  const f=partidasDeDatos().find(x=>x.id===id);
+  if(!f||!f.item.desc||!(f.item.price>0)){showToast('La partida necesita descripción y precio mayor que 0',true);return}
+  const b=document.getElementById(id+'-prec');if(b)b.disabled=true;
+  const r=await savePrecItems([f.item]);
+  if(b)b.disabled=false;
+  if(r)marcarGuardada(id);
+}
+async function saveAllToPreciario(){
+  const todas=partidasDeDatos().filter(x=>x.item.desc&&x.item.price>0);
+  if(!todas.length){showToast('No hay partidas con precio para guardar',true);return}
+  if(!confirm(`¿Guardar ${todas.length} partidas en el preciario? Revisa antes los precios: las que ya existan se actualizarán.`))return;
+  const r=await savePrecItems(todas.slice(0,500).map(x=>x.item));
+  if(r)todas.forEach(x=>marcarGuardada(x.id));
+}
+async function renderPreciario(){
+  const list=document.getElementById('prec-list'),st=document.getElementById('prec-status');
+  if(driveConectado()){
+    st.textContent='⏳ Cargando el preciario compartido de Drive…';
+    try{const n=await syncPreciario();st.textContent=`☁️ Preciario compartido de Drive (${n} partidas). Para borrar una, quita su fila en la hoja Preciario de Drive.`}
+    catch(e){st.textContent='⚠️ No se pudo leer Drive ('+e.message+'). Se muestra la copia de este dispositivo.'}
+  }else{st.textContent='⚠️ Drive sin conectar: este preciario solo existe en este dispositivo.'}
+  DB=getDB();
+  if(!DB.preciario||DB.preciario.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Preciario vacío</div><div class="empty-sub">Añade tus partidas habituales o guarda las de un presupuesto revisado</div></div>`;return}
+  const conDrive=driveConectado();
   list.innerHTML=DB.preciario.map((p,i)=>`
     <div class="prec-item">
-      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${p.price.toFixed(2)} € / ${p.unit}<span class="tag">${esc(p.cap)}</span></div></div>
-      <button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>
+      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">${esc(p.zona)}</span>`:''}</div></div>
+      ${conDrive?'':`<button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>`}
     </div>`).join('');
 }
-function delPreciario(i){DB=getDB();DB.preciario.splice(i,1);saveDB(DB);renderPreciario();showToast('Eliminado')}
+function delPreciario(i){
+  if(driveConectado()){showToast('Con Drive conectado, borra la fila en la hoja Preciario de Drive',true);return}
+  DB=getDB();DB.preciario.splice(i,1);saveDB(DB);renderPreciario();showToast('Eliminado');
+}
 
 // ══ AJUSTES ══
 async function changePassword(){

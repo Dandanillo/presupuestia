@@ -56,6 +56,13 @@ Puedes abrir la hoja en Google Sheets, o descargarla como Excel (Archivo → Des
 ### 6. Lou
 Lou abre la hoja compartida, copia la URL y la clave de la pestaña **Conexión** y las pega en **su** Ajustes → Drive compartido (en su móvil u ordenador).
 
+## El preciario compartido
+- En cada partida de un presupuesto hay un botón **📚 Guardar en preciario**, y abajo uno para guardar **todas** las partidas ya revisadas. Revisa los precios antes: si la partida ya existe, se actualiza.
+- Los precios se guardan en la pestaña **Preciario** de la hoja, y la IA los usa en los presupuestos nuevos de los dos.
+- Para **borrar** un precio, borra su fila en la pestaña Preciario de la hoja de Drive.
+- La columna **Zona** es opcional: sirve para tener precios distintos por zona.
+- No hace falta tocar el script de Drive: esta mejora solo cambia la web.
+
 ## Seguridad
 - Quien tenga la **URL y la clave** puede leer y escribir en la hoja. No las compartáis fuera de vosotros.
 - Si la clave se filtra: en Apps Script ejecuta **`nuevaClave`**. La anterior deja de valer; copia la nueva de la pestaña Conexión y pégala en la web.
