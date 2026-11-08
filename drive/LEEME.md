@@ -67,6 +67,13 @@ Quien tenga ese enlace entra en vuestros datos. Si se filtra, ejecuta `nuevaClav
 - **Precios por zona:** al crear una obra puedes poner la **zona** (Barcelona, Girona…). La IA recibe los precios generales (sin zona) y los de esa zona; si una partida tiene los dos, usa el de la zona, y los de otras zonas no los ve. Si la zona no tiene precios, usa los generales y ajusta el resto al mercado de esa zona. Al pulsar **Guardar en preciario**, las partidas se guardan con la zona de ese presupuesto. En la pestaña **Preciario** puedes filtrar por zona. La zona del presupuesto también queda en la columna **Notas** de Drive.
 - No hace falta tocar el script de Drive: esta mejora solo cambia la web.
 
+## Plantillas de partidas
+Una plantilla es un grupo de partidas con nombre, por ejemplo "Baño completo" o "Cambio de ventanas".
+- **Crear:** revisa un presupuesto (cantidades y precios) y pulsa **📋 Guardar como plantilla**. Si el nombre ya existe, se sustituye.
+- **Usar:** pestaña **Preciario → Plantillas → Usar**. Se abre un presupuesto con esas partidas, **sin gastar IA**. Se usan el nombre, el tipo y la zona que hayas puesto en *Nueva obra*, y los precios se actualizan con tu preciario (gana el de la zona). Revisa las cantidades.
+- **Compartidas:** con Drive conectado, las plantillas están en la pestaña **Plantillas** de la hoja y las ven Daniel y Lou. Borrar una en la web la quita para los dos.
+- Necesita el script en versión 2.1 (ver *Actualizar el script*).
+
 ## Cuentas (entrar desde cualquier sitio)
 Con la versión 2.0 del script, las cuentas viven en Drive y se entra con **usuario y contraseña** desde cualquier móvil u ordenador.
 - **Primera vez:** la web te pide la clave de Drive (pestaña Conexión, celda B1) para crear la cuenta de administrador. Solo se puede hacer mientras no haya ninguna cuenta.

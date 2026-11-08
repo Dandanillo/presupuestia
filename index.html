@@ -485,6 +485,7 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <button class="btn btn-sec" id="share-pdf-btn" style="display:none" onclick="sharePDF()">📤 Compartir PDF</button>
         <button class="btn btn-green" onclick="saveToDrive()">☁️ Guardar en Drive</button>
         <button class="btn btn-green" onclick="saveAllToPreciario()">📚 Guardar todas las partidas en el preciario</button>
+        <button class="btn btn-green" onclick="saveAsTemplate()">📋 Guardar como plantilla</button>
         <button class="btn btn-purple" onclick="saveToHistory()">💾 Guardar en historial</button>
         <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar texto</button>
         <button class="btn btn-sec" onclick="resetForm()">➕ Nuevo presupuesto</button>
@@ -509,6 +510,9 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <div class="page-title">Preciario</div>
       <div class="page-sub">Tus partidas con precios propios — la IA las usará como referencia</div>
     </div>
+    <div class="set-title">📋 Plantillas de partidas</div>
+    <div class="info-box" id="plant-status" style="margin-bottom:12px"></div>
+    <div id="plant-list" style="margin-bottom:18px"></div>
     <div class="card">
       <div class="card-title">➕ Nueva partida</div>
       <div class="field"><label>Descripción</label><input type="text" id="prec-desc" placeholder="Ej: Impermeabilización con lámina LBM-40"></div>
@@ -930,7 +934,7 @@ function showTab(name){
     if(nav)nav.classList.toggle('active',t===name);
   });
   if(name==='historial'){renderHistory();renderDriveHistory()}
-  if(name==='preciario')renderPreciario();
+  if(name==='preciario'){renderPlantillas();renderPreciario()}
   if(name==='nuevo')refreshZonas();
   if(name==='admin')renderUsers();
   if(name==='ajustes'){renderAiSettings();renderEmpresaSettings();renderDriveSettings();syncShared().then(()=>{const f=document.activeElement;if(document.getElementById('tab-ajustes').style.display!=='none'&&!(f&&/^(emp|ai)-/.test(f.id||''))){renderAiSettings();renderEmpresaSettings()}})}
@@ -2006,6 +2010,98 @@ function deleteFromHistory(){
   if(selectedHistIdx===null)return;
   DB=getDB();DB.history.splice(selectedHistIdx,1);saveDB(DB);
   closeModal('modal-hist');renderHistory();showToast('Eliminado');
+}
+
+// ══ PLANTILLAS DE PARTIDAS ══
+// Una plantilla es un grupo de partidas con nombre ("Baño completo"). Con Drive conectado, las comparten Daniel y Lou.
+function getPlantillas(){return ((getDB()||{}).plantillas)||[]}
+function setPlantillas(l){DB=getDB();DB.plantillas=l;saveDB(DB)}
+function plantillaDesdePresupuesto(){
+  const out=[];
+  ((generatedData&&generatedData.capitulos)||[]).forEach(cap=>(cap.subcapitulos||[]).forEach(sub=>(sub.partidas||[]).forEach(p=>{
+    if(p._del)return;
+    const desc=String(p.descripcion||'').trim();if(!desc)return;
+    out.push({capitulo:String(cap.nombre||''),subcapitulo:String(sub.nombre||''),codigo:String(p.codigo||''),descripcion:desc,cantidad:Number(p.cantidad)||0,unidad:String(p.unidad||''),precio:Number(p.precio_unitario)||0});
+  })));
+  return out;
+}
+async function syncPlantillas(){
+  const r=await driveCall('plantillas.listar');
+  const remotas=(r.plantillas||[]).map(x=>Object.assign({},x,{s:1}));
+  const claves=new Set(remotas.map(x=>normZona(x.nombre)));
+  // Lo que solo estaba en este dispositivo se sube; lo que ya estuvo en Drive y desapareció se borró allí a propósito
+  const soloLocal=getPlantillas().filter(x=>!x.s&&!claves.has(normZona(x.nombre)));
+  for(const x of soloLocal){await driveCall('plantillas.guardar',{nombre:x.nombre,partidas:x.partidas,autor:currentUser?currentUser.username:''});remotas.push(Object.assign({},x,{s:1}))}
+  setPlantillas(remotas);
+  return remotas.length;
+}
+async function saveAsTemplate(){
+  const partidas=plantillaDesdePresupuesto();
+  if(!partidas.length){showToast('No hay partidas para guardar',true);return}
+  const def=(generatedData&&generatedData._tipo)||'';
+  const nombre=(window.prompt('Nombre de la plantilla (por ejemplo: Baño completo). Si ya existe, se sustituye:',def)||'').trim().slice(0,80);
+  if(!nombre)return;
+  const k=normZona(nombre);
+  const lista=getPlantillas().filter(x=>normZona(x.nombre)!==k);
+  lista.push({nombre,partidas,autor:currentUser?currentUser.username:''});
+  setPlantillas(lista);
+  if(!driveConectado()){showToast(`Plantilla "${nombre}" guardada solo en este dispositivo`);return}
+  try{await driveCall('plantillas.guardar',{nombre,partidas,autor:currentUser?currentUser.username:''});showToast(`Plantilla "${nombre}" guardada y compartida por Drive ✓`)}
+  catch(e){showToast('Guardada aquí, pero no en Drive: '+scriptViejo(e).message,true)}
+}
+async function renderPlantillas(){
+  const st=document.getElementById('plant-status'),list=document.getElementById('plant-list');
+  if(driveConectado()){
+    st.textContent='⏳ Cargando plantillas de Drive…';
+    try{const n=await syncPlantillas();st.textContent=`☁️ Plantillas compartidas por Drive (${n}). Se crean con "📋 Guardar como plantilla" desde un presupuesto revisado.`}
+    catch(e){st.textContent='⚠️ No se pudo leer Drive ('+scriptViejo(e).message+'). Se muestran las de este dispositivo.'}
+  }else{st.textContent='Drive sin conectar: las plantillas solo existen en este dispositivo. Se crean con "📋 Guardar como plantilla" desde un presupuesto revisado.'}
+  const l=getPlantillas();
+  if(!l.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Sin plantillas</div><div class="empty-sub">Revisa un presupuesto y pulsa "Guardar como plantilla"</div></div>';return}
+  list.innerHTML=l.map((x,i)=>`
+    <div class="prec-item">
+      <div class="prec-info"><div class="prec-name">${esc(x.nombre)}</div><div class="prec-meta">${x.partidas.length} partidas</div></div>
+      <button class="btn btn-sm btn-green" onclick="usePlantilla(${i})">Usar</button>
+      <button class="btn btn-sm btn-red" onclick="delPlantilla(${i})">Borrar</button>
+    </div>`).join('');
+}
+// Crea un presupuesto con las partidas de la plantilla, sin gastar IA. Los precios se actualizan con el preciario de la zona.
+function usePlantilla(i){
+  const x=getPlantillas()[i];if(!x)return;
+  const zona=zonaActual();
+  const idx=new Map();
+  preciosDeZona(getDB().preciario||[],zona).forEach(p=>idx.set(normZona(p.desc)+'|'+normZona(p.unit),Number(p.price)||0));  // los de la zona van después y ganan
+  let act=0;
+  const caps=[],mc=new Map(),ms=new Map();
+  x.partidas.forEach(p=>{
+    const cn=p.capitulo||'VARIOS',sn=p.subcapitulo||'General';
+    if(!mc.has(cn)){const c={nombre:cn,subcapitulos:[]};mc.set(cn,c);caps.push(c)}
+    const sk=cn+'|'+sn;
+    if(!ms.has(sk)){const sc={nombre:sn,partidas:[]};ms.set(sk,sc);mc.get(cn).subcapitulos.push(sc)}
+    let precio=Number(p.precio)||0;
+    const pp=idx.get(normZona(p.descripcion)+'|'+normZona(p.unidad));
+    if(pp>0&&pp!==precio){precio=pp;act++}
+    ms.get(sk).partidas.push({codigo:p.codigo||'',descripcion:p.descripcion,cantidad:Number(p.cantidad)||0,unidad:p.unidad||'',precio_unitario:precio});
+  });
+  const nombre=(document.getElementById('obra-nombre').value||'').trim();
+  const tipo=document.getElementById('obra-tipo').value;
+  generatedData={capitulos:caps,notas:'',_obra:nombre||x.nombre,_tipo:tipo||x.nombre,_zona:zona};
+  showTab('nuevo');
+  for(let k=1;k<=4;k++){const el=document.getElementById('step-'+k);if(el)el.style.display='none'}
+  document.getElementById('step-indicator').style.display='none';
+  document.getElementById('results-section').style.display='block';
+  renderResults(generatedData);
+  showToast(`Plantilla "${x.nombre}" cargada. Revisa las cantidades${act?` (${act} precios actualizados con tu preciario)`:''}`);
+}
+async function delPlantilla(i){
+  const x=getPlantillas()[i];if(!x)return;
+  if(!confirm(`¿Borrar la plantilla "${x.nombre}"?${driveConectado()?' También desaparece para Lou.':''}`))return;
+  if(driveConectado()){
+    try{await driveCall('plantillas.borrar',{nombre:x.nombre})}
+    catch(e){if(!/no existe/.test(e.message)){showToast(scriptViejo(e).message,true);return}}
+  }
+  setPlantillas(getPlantillas().filter((_,k)=>k!==i));
+  renderPlantillas();showToast('Plantilla borrada');
 }
 
 // ══ PRECIARIO ══
