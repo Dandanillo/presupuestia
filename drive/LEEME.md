@@ -67,6 +67,16 @@ Quien tenga ese enlace entra en vuestros datos. Si se filtra, ejecuta `nuevaClav
 - La columna **Zona** es opcional: sirve para tener precios distintos por zona.
 - No hace falta tocar el script de Drive: esta mejora solo cambia la web.
 
+## Cuentas (entrar desde cualquier sitio)
+Con la versión 2.0 del script, las cuentas viven en Drive y se entra con **usuario y contraseña** desde cualquier móvil u ordenador.
+- **Primera vez:** la web te pide la clave de Drive (pestaña Conexión, celda B1) para crear la cuenta de administrador. Solo se puede hacer mientras no haya ninguna cuenta.
+- **Más usuarios:** el administrador los crea en la pestaña **Administración** de la web, con nombre, correo, teléfono y dirección (opcionales). Nadie puede registrarse desde fuera.
+- **Pestaña Usuarios de la hoja:** quién tiene cuenta y sus datos de contacto. **Las contraseñas no están en la hoja**: la web las convierte en una huella lenta antes de enviarlas y el script solo guarda otra huella, en sus propiedades privadas.
+- **Pestaña Accesos de la hoja:** fecha y hora, usuario, resultado (Correcto, Fallo, Bloqueado, Alta, Baja, Cambio) y el dispositivo que declara el navegador. **La IP no se puede registrar**: Google no la da a los scripts.
+- **Bloqueo:** 5 contraseñas malas seguidas bloquean ese usuario 15 minutos.
+- **Contraseñas:** mínimo 10 caracteres.
+- Al **salir**, el dispositivo olvida la clave de Drive y la clave de Gemini compartida, así que es seguro usar un PC ajeno.
+
 ## Seguridad
 - **Candado:** en un dispositivo nuevo, la web no deja ni crear cuenta hasta que se pegan la URL y la clave de Drive, y Drive las acepta. Quien no las tenga solo ve la pantalla de acceso privado. Es un candado en la propia web: protege vuestros datos (que están en Drive), pero no sirve contra alguien que modifique su copia de la página en su navegador, por eso la clave de Drive es lo que de verdad importa. No la compartáis.
 - Tu clave de Gemini se guarda solo en cada dispositivo. No la pases a nadie: sería la única forma de gastar tu cuota gratuita.
