@@ -12,7 +12,7 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '2.1';
+var VERSION = '2.2';
 
 var COLS = {
   'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA 21%', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas'],
@@ -37,7 +37,8 @@ var PUBLICAS = ['auth.estado', 'auth.login'];
 var MAX_FALLOS = 5;        // intentos fallidos seguidos…
 var BLOQUEO_SEG = 900;     // …y se bloquea ese usuario 15 minutos
 var ESTADOS = ['Borrador', 'Enviado', 'Aceptado', 'Rechazado'];
-var CLAVES_EMPRESA = ['nombre', 'nif', 'dir', 'tel', 'email', 'web', 'validez', 'cond'];
+var CLAVES_EMPRESA = ['nombre', 'nif', 'dir', 'tel', 'email', 'web', 'validez', 'cond', 'logo', 'logoW', 'logoH'];
+var MAX_LOGO = 45000;   // una celda de Google Sheets admite 50.000 caracteres
 
 // ───────────────────────── Preparación (se ejecuta una vez a mano) ─────────────────────────
 
@@ -368,7 +369,15 @@ function empresaGuardar(ss, req) {
   var d = req.datos || {};
   var h = hoja(ss, 'Empresa');
   var antes = leer(h, 'Empresa').length;
-  var filas = CLAVES_EMPRESA.map(function (k) { return [k, t(d[k], k === 'cond' ? 800 : 150)]; });
+  var logo = String(d.logo || '');
+  if (logo && (logo.length > MAX_LOGO || !/^data:image\/(png|jpeg);base64,[A-Za-z0-9+\/=]+$/.test(logo))) {
+    throw new Error('El logo no es válido o es demasiado grande');
+  }
+  var filas = CLAVES_EMPRESA.map(function (k) {
+    if (k === 'logo') return [k, logo];
+    if (k === 'logoW' || k === 'logoH') return [k, logo ? String(Math.min(2000, Math.max(1, parseInt(d[k], 10) || 1))) : ''];
+    return [k, t(d[k], k === 'cond' ? 800 : 150)];
+  });
   escribirTodo(h, 'Empresa', filas, antes);
   return { ok: true };
 }

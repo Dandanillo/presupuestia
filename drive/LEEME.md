@@ -56,7 +56,7 @@ Puedes abrir la hoja en Google Sheets, o descargarla como Excel (Archivo → Des
 ### 6. Lou
 En tu web: **Ajustes → Drive compartido → 🔗 Copiar enlace de acceso para Lou**. Mándaselo **solo a ella**, por un chat privado. Cuando lo abra en su móvil u ordenador, se conecta a Drive sin pegar nada, y solo tiene que crear su usuario y contraseña en ese dispositivo.
 
-Después, todo esto le llega solo desde Drive: presupuestos, preciario y datos de la empresa (menos el logo, que es de cada dispositivo). Si quieres que tampoco tenga que pegar la clave de Gemini, en **Ajustes → IA** pulsa **☁️ Compartir esta clave por Drive** (necesita el script actualizado, ver abajo).
+Después, todo esto le llega solo desde Drive: presupuestos, preciario y datos de la empresa con su logo. Si quieres que tampoco tenga que pegar la clave de Gemini, en **Ajustes → IA** pulsa **☁️ Compartir esta clave por Drive** (necesita el script actualizado, ver abajo).
 
 Quien tenga ese enlace entra en vuestros datos. Si se filtra, ejecuta `nuevaClave` (ver Seguridad).
 
@@ -90,6 +90,9 @@ Con la versión 2.0 del script, las cuentas viven en Drive y se entra con **usua
 - Quien tenga la **URL y la clave** puede leer y escribir en la hoja. No las compartáis fuera de vosotros.
 - Si la clave se filtra: en Apps Script ejecuta **`nuevaClave`**. La anterior deja de valer; copia la nueva de la pestaña Conexión y pégala en la web.
 - La clave se guarda solo en el navegador de cada uno, nunca en GitHub.
+
+## El logo del PDF
+El logo se guarda en la pestaña **Empresa** de la hoja y llega solo a todos los dispositivos. Al subirlo, la web lo reduce (máximo 600 × 240 px) hasta que quepa en una celda de Google Sheets; si tiene transparencia lo mantiene en PNG mientras pueda, y si no, lo pasa a JPG. Para quitarlo, pulsa quitar logo y guarda: desaparece de todos. Necesita el script en versión 2.2.
 
 ## Actualizar el script
 Cuando salga una versión nueva de `drive/Code.gs` (esta añade compartir la clave de Gemini):
