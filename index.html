@@ -1438,7 +1438,7 @@ function delRow(id){
 const DRIVE_URL_RE=/^https:\/\/script\.google\.com\/(a\/macros\/[A-Za-z0-9._-]+\/|macros\/)s\/[A-Za-z0-9_-]+\/exec$/;
 const ESTADOS_PRES=['Borrador','Enviado','Aceptado','Rechazado'];
 let driveList=null;
-let DRIVE_URL_FIJA='';   // dirección del script de Drive: si está puesta, las cuentas viven en Drive
+let DRIVE_URL_FIJA='https://script.google.com/macros/s/AKfycbz0VPaeLYsrDbBsXprWEWL0Ak0YSnLsI8wMz_wJ5cUhg0-Tg_2fU92sidjpxUZdB8y-/exec';   // dirección del script de Drive: si está puesta, las cuentas viven en Drive
 function modoCuentas(){return !!DRIVE_URL_FIJA}
 function getDriveCfg(){let c={};try{c=JSON.parse(localStorage.getItem('pia_drive')||'null')||{}}catch{}if(DRIVE_URL_FIJA)c.url=DRIVE_URL_FIJA;return c}
 function driveConectado(){const c=getDriveCfg();return !!(c.url&&c.clave)}
