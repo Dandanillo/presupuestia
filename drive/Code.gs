@@ -12,7 +12,7 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '2.0';
+var VERSION = '2.1';
 
 var COLS = {
   'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA 21%', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas'],
@@ -20,7 +20,8 @@ var COLS = {
   'Preciario': ['Descripción', 'Unidad', 'Precio', 'Capítulo', 'Zona', 'Autor', 'Modificado'],
   'Empresa': ['Clave', 'Valor'],
   'Usuarios': ['Usuario', 'Nombre', 'Correo', 'Teléfono', 'Dirección', 'Rol', 'Creado', 'Último acceso'],
-  'Accesos': ['Fecha y hora', 'Usuario', 'Resultado', 'Dispositivo (lo declara el navegador)', 'Detalle']
+  'Accesos': ['Fecha y hora', 'Usuario', 'Resultado', 'Dispositivo (lo declara el navegador)', 'Detalle'],
+  'Plantillas': ['Plantilla', 'Capítulo', 'Subcapítulo', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'Precio unitario', 'Autor', 'Modificado']
 };
 // Columnas (empezando en 1) que son texto plano: así Sheets no convierte fechas ni fórmulas
 var TEXTO = {
@@ -29,7 +30,8 @@ var TEXTO = {
   'Preciario': [1, 2, 4, 5, 6, 7],
   'Empresa': [1, 2],
   'Usuarios': [1, 2, 3, 4, 5, 6, 7, 8],
-  'Accesos': [1, 2, 3, 4, 5]
+  'Accesos': [1, 2, 3, 4, 5],
+  'Plantillas': [1, 2, 3, 4, 5, 7, 9, 10]
 };
 var PUBLICAS = ['auth.estado', 'auth.login'];
 var MAX_FALLOS = 5;        // intentos fallidos seguidos…
@@ -137,6 +139,9 @@ function despachar(req) {
     case 'usuarios.crear': return usuariosCrear(ss, req);
     case 'usuarios.borrar': return usuariosBorrar(ss, req);
     case 'usuarios.cambiarPass': return usuariosCambiarPass(ss, req);
+    case 'plantillas.listar': return plantillasListar(ss);
+    case 'plantillas.guardar': return plantillasGuardar(ss, req);
+    case 'plantillas.borrar': return plantillasBorrar(ss, req);
     case 'ia.leer': return iaLeer();
     case 'ia.guardar': return iaGuardar(req);
     default: throw new Error('Acción desconocida');
@@ -570,5 +575,56 @@ function usuariosCambiarPass(ss, req) {
   v.todos[v.usuario] = v.ficha;
   usuariosGuardar(v.todos);
   registrarAcceso(ss, v.usuario, 'Cambio', req, 'Cambió su contraseña');
+  return { ok: true };
+}
+
+// ───────────────────────── Plantillas de partidas ─────────────────────────
+// Una plantilla es un grupo de partidas con nombre (por ejemplo "Baño completo").
+// Cada fila de la pestaña es una partida; las filas con el mismo nombre forman una plantilla.
+
+function plantillasListar(ss) {
+  var filas = leer(hoja(ss, 'Plantillas'), 'Plantillas').filter(function (f) { return f[0] !== ''; });
+  var orden = [], mapa = {};
+  filas.forEach(function (f) {
+    var nombre = sinGuardia(f[0]);
+    var k = norm(nombre);
+    if (!mapa[k]) { mapa[k] = { nombre: nombre, autor: sinGuardia(f[8]), modificado: sinGuardia(f[9]), partidas: [] }; orden.push(k); }
+    mapa[k].partidas.push({ capitulo: sinGuardia(f[1]), subcapitulo: sinGuardia(f[2]), codigo: sinGuardia(f[3]), descripcion: sinGuardia(f[4]), cantidad: n(f[5]), unidad: sinGuardia(f[6]), precio: n(f[7]) });
+  });
+  return { ok: true, plantillas: orden.map(function (k) { return mapa[k]; }) };
+}
+
+function plantillasGuardar(ss, req) {
+  var nombre = t(req.nombre, 80).trim();
+  if (!nombre) throw new Error('La plantilla necesita un nombre');
+  var partidas = req.partidas;
+  if (!Array.isArray(partidas) || !partidas.length) throw new Error('La plantilla no tiene partidas');
+  if (partidas.length > 300) throw new Error('Demasiadas partidas en una plantilla (máximo 300)');
+  var h = hoja(ss, 'Plantillas');
+  var filas = leer(h, 'Plantillas');
+  var antes = filas.length;
+  var k = norm(nombre);
+  var resto = filas.filter(function (f) { return norm(sinGuardia(f[0])) !== k; });
+  if (resto.length + partidas.length > 5000) throw new Error('Hay demasiadas plantillas guardadas. Borra alguna');
+  var ts = ahora(ss), autor = t(req.autor, 60), nuevas = 0;
+  partidas.forEach(function (q) {
+    var desc = t(q.descripcion, 400);
+    if (!desc.trim()) return;
+    resto.push([nombre, t(q.capitulo, 100), t(q.subcapitulo, 100), t(q.codigo, 20), desc, n(q.cantidad), t(q.unidad, 20), n(q.precio), autor, ts]);
+    nuevas++;
+  });
+  if (!nuevas) throw new Error('La plantilla no tiene partidas con descripción');
+  escribirTodo(h, 'Plantillas', resto, antes);
+  return { ok: true, partidas: nuevas };
+}
+
+function plantillasBorrar(ss, req) {
+  var k = norm(t(req.nombre, 80));
+  if (!k) throw new Error('Falta el nombre de la plantilla');
+  var h = hoja(ss, 'Plantillas');
+  var filas = leer(h, 'Plantillas');
+  var resto = filas.filter(function (f) { return norm(sinGuardia(f[0])) !== k; });
+  if (resto.length === filas.length) throw new Error('Esa plantilla no existe');
+  escribirTodo(h, 'Plantillas', resto, filas.length);
   return { ok: true };
 }
