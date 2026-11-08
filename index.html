@@ -1899,7 +1899,8 @@ async function buildBudgetPDF(){
       if(to<=from)return;
       if(si>0)target.addPage();
       const f=from;
-      target.autoTable(tableOpts(si===0?y:M,body.slice(f,to),(ri,pg)=>{pageOf[f+ri]=pg}));
+      // la página real del documento (el número que da autoTable cuenta desde 1 en cada tramo)
+      target.autoTable(tableOpts(si===0?y:M,body.slice(f,to),(ri)=>{pageOf[f+ri]=target.internal.getCurrentPageInfo().pageNumber}));
       from=to;
     });
     return pageOf;
@@ -1910,6 +1911,8 @@ async function buildBudgetPDF(){
     const pg=layoutTable(scratch,breaks);
     let orphan=-1;
     for(let r=1;r<body.length-1;r++){if(isHdr[r]&&pg[r]!==pg[r+1]){orphan=r;break}}
+    // capítulo + subcapítulo seguidos: el salto va antes del capítulo, para no dejarlo solo
+    while(orphan>1&&isHdr[orphan-1])orphan--;
     if(orphan<0||breaks.includes(orphan))break;
     breaks.push(orphan);breaks.sort((a,b)=>a-b);
   }
