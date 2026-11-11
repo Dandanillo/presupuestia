@@ -475,6 +475,17 @@ audio{width:100%;margin-top:14px;border-radius:8px}
             <span style="font-size:14px;color:var(--text2);font-weight:600">%</span>
           </div>
         </div>
+        <div class="margin-row" style="margin-top:10px">
+          <div>
+            <div class="margin-row-left">🧾 IVA</div>
+            <div class="margin-row-sub">En reformas de vivienda puede aplicar el 10 %: confírmalo con tu gestor</div>
+          </div>
+          <div class="margin-input-wrap">
+            <select class="margin-input" id="iva-pct" style="width:auto;min-width:80px" onchange="setIva()">
+              <option value="21">21 %</option><option value="10">10 %</option><option value="0">0 %</option>
+            </select>
+          </div>
+        </div>
         <div class="summary-rows" id="summary-rows"></div>
       </div>
       <div class="card">
@@ -1429,16 +1440,25 @@ function recalcAll(){
   generatedData._baseTotal=total;
   updateSummary();
 }
+// IVA del presupuesto: 21, 10 o 0. Lo que no sea uno de esos valores se trata como 21
+function ivaPct(){const v=Number(generatedData&&generatedData._iva);return (v===10||v===0)?v:21}
+function setIva(){
+  if(!generatedData)return;
+  generatedData._iva=Number(document.getElementById('iva-pct').value);
+  updateSummary();
+}
 function updateSummary(){
   const base=generatedData?._baseTotal||0;
   const mp=parseFloat(document.getElementById('margin-pct')?.value)||0;
   const margin=base*(mp/100);
-  const iva=(base+margin)*0.21;
+  const ip=ivaPct();
+  const sel=document.getElementById('iva-pct');if(sel&&sel.value!==String(ip))sel.value=String(ip);
+  const iva=(base+margin)*(ip/100);
   const total=base+margin+iva;
   document.getElementById('summary-rows').innerHTML=`
     <div class="s-row"><span class="s-label">Base imponible</span><span class="s-value">${base.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>
     ${mp>0?`<div class="s-row"><span class="s-label">Margen ${mp}%</span><span class="s-value" style="color:var(--green)">+${margin.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`:''}
-    <div class="s-row"><span class="s-label">IVA 21%</span><span class="s-value">${iva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>
+    <div class="s-row"><span class="s-label">IVA ${ip}%</span><span class="s-value">${iva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>
     <div class="s-divider"></div>
     <div class="s-row"><span class="s-label" style="font-weight:700;color:var(--text)">Total con IVA</span><span class="s-value total">${total.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`;
 }
@@ -1600,7 +1620,7 @@ function budgetPayload(r){
   })));
   return{
     presupuesto:{id:g._id,numero:g._numero,fecha:g._fecha,obra:g._obra||'',cliente:g._cliente||'',direccion:g._direccion||'',tipo:g._tipo||'',
-      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,autor:currentUser?currentUser.username:'',notas:(g._zona?'Zona: '+g._zona+'. ':'')+(g.notas||'')},
+      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,ivaPct:r.ivaPct,autor:currentUser?currentUser.username:'',notas:(g._zona?'Zona: '+g._zona+'. ':'')+(g.notas||'')},
     partidas
   };
 }
@@ -1671,7 +1691,7 @@ function loadDriveBudget(d){
     s.partidas.push({codigo:q.codigo,descripcion:q.descripcion,cantidad:q.cantidad,unidad:q.unidad,precio_unitario:q.precio});
   });
   caps.forEach(c=>{delete c._m});
-  generatedData={capitulos:caps,notas:pr.notas||'',_obra:pr.obra,_tipo:pr.tipo,_cliente:pr.cliente,_direccion:pr.direccion,_id:pr.id,_numero:pr.numero,_fecha:pr.fecha};
+  generatedData={capitulos:caps,notas:pr.notas||'',_obra:pr.obra,_tipo:pr.tipo,_cliente:pr.cliente,_direccion:pr.direccion,_id:pr.id,_numero:pr.numero,_fecha:pr.fecha,_iva:[0,10,21].includes(Number(pr.ivaPct))?Number(pr.ivaPct):21};
   showTab('nuevo');
   for(let i=1;i<=4;i++){const el=document.getElementById('step-'+i);if(el)el.style.display='none'}
   document.getElementById('step-indicator').style.display='none';
@@ -1804,7 +1824,16 @@ async function buildBudgetPDF(){
   const mp=parseFloat(document.getElementById('margin-pct').value)||0;
   // Número y fecha: se fijan la primera vez y se conservan si se guarda en el historial
   const now=new Date();const p2=n=>String(n).padStart(2,'0');
-  if(!generatedData._numero)generatedData._numero='P-'+now.getFullYear()+p2(now.getMonth()+1)+p2(now.getDate())+'-'+p2(now.getHours())+p2(now.getMinutes());
+  if(!generatedData._numero){
+    // Número correlativo (P-2026-001…) pedido a Drive; si no hay conexión, uno provisional con la fecha y la hora
+    let num='';
+    if(driveConectado()){try{num=String((await driveCall('numero.siguiente',{anio:now.getFullYear()})).numero||'')}catch(e){console.error(e.message)}}
+    if(!/^P-\d{4}-\d{3,6}$/.test(num)){
+      num='P-'+now.getFullYear()+p2(now.getMonth()+1)+p2(now.getDate())+'-'+p2(now.getHours())+p2(now.getMinutes());
+      if(driveConectado())showToast('No se pudo pedir el número a Drive: este presupuesto lleva un número provisional de fecha y hora',true);
+    }
+    generatedData._numero=num;
+  }
   if(!generatedData._fecha)generatedData._fecha=p2(now.getDate())+'/'+p2(now.getMonth()+1)+'/'+now.getFullYear();
 
   const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -1921,12 +1950,12 @@ async function buildBudgetPDF(){
 
   // ── Totales ──
   const need=(h)=>{if(y+h>H-22){doc.addPage();y=M}};
-  const iva=round2(base*0.21),total=round2(base+iva);
+  const ipc=ivaPct(),iva=round2(base*ipc/100),total=round2(base+iva);
   need(36);
   const bx=W-M-84;
   doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...NAVY);
   doc.text('Base imponible',bx,y);doc.text(fmtNum(base)+' €',W-M,y,{align:'right'});y+=6;
-  doc.text('IVA 21%',bx,y);doc.text(fmtNum(iva)+' €',W-M,y,{align:'right'});y+=3.5;
+  doc.text('IVA '+ipc+'%',bx,y);doc.text(fmtNum(iva)+' €',W-M,y,{align:'right'});y+=3.5;
   doc.setFillColor(...NAVY);doc.rect(bx-3,y,87,11,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(255,255,255);
   doc.text('TOTAL',bx,y+7.4);doc.text(fmtNum(total)+' €',W-M-1,y+7.4,{align:'right'});
@@ -1965,7 +1994,7 @@ async function buildBudgetPDF(){
   }
   const fecha=(generatedData._fecha||'').split('/').reverse().join('');
   const filename='Presupuesto_'+slugFile(generatedData._obra)+'_'+fecha+'.pdf';
-  return {doc,filename,base,iva,total};
+  return {doc,filename,base,iva,total,ivaPct:ipc};
 }
 async function downloadPDF(){
   try{

@@ -91,6 +91,11 @@ Con la versión 2.0 del script, las cuentas viven en Drive y se entra con **usua
 - Si la clave se filtra: en Apps Script ejecuta **`nuevaClave`**. La anterior deja de valer; copia la nueva de la pestaña Conexión y pégala en la web.
 - La clave se guarda solo en el navegador de cada uno, nunca en GitHub.
 
+## IVA y numeración
+- En cada presupuesto eliges el **IVA** (21 %, 10 % o 0 %) junto al margen. El total, el PDF y la hoja usan el que elijas. En reformas de vivienda puede aplicar el 10 % si se cumplen los requisitos: confírmalo con tu gestor. Los presupuestos de antes cuentan como 21 %.
+- El **número** es correlativo por año (`P-2026-001`, `002`…), el mismo para todos. Se asigna al generar el PDF o guardar en Drive por primera vez y no cambia al volver a generarlo. Si Drive no responde en ese momento, el presupuesto lleva un número provisional de fecha y hora, y la web te avisa.
+- En la pestaña **Presupuestos** aparece una columna nueva, **IVA %**, al final. Necesita el script en versión 2.3.
+
 ## El logo del PDF
 El logo se guarda en la pestaña **Empresa** de la hoja y llega solo a todos los dispositivos. Al subirlo, la web lo reduce (máximo 600 × 240 px) hasta que quepa en una celda de Google Sheets; si tiene transparencia lo mantiene en PNG mientras pueda, y si no, lo pasa a JPG. Para quitarlo, pulsa quitar logo y guarda: desaparece de todos. Necesita el script en versión 2.2.
 

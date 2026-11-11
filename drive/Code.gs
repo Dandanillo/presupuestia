@@ -12,10 +12,10 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '2.2';
+var VERSION = '2.3';
 
 var COLS = {
-  'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA 21%', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas'],
+  'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas', 'IVA %'],
   'Partidas': ['ID presupuesto', 'Capítulo', 'Subcapítulo', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'Precio unitario', 'Importe'],
   'Preciario': ['Descripción', 'Unidad', 'Precio', 'Capítulo', 'Zona', 'Autor', 'Modificado'],
   'Empresa': ['Clave', 'Valor'],
@@ -126,6 +126,7 @@ function despachar(req) {
     case 'ping': return { ok: true, version: VERSION, hoja: ss.getName() };
     case 'listar': return listar(ss);
     case 'abrir': return abrir(ss, req);
+    case 'numero.siguiente': return numeroSiguiente(ss, req);
     case 'guardar': return guardar(ss, req);
     case 'subirPdf': return subirPdf(ss, req);
     case 'estado': return cambiarEstado(ss, req);
@@ -161,6 +162,10 @@ function hoja(ss, nombre) {
       var filas = Math.max(1, h.getMaxRows() - 1);
       h.getRange(2, c, filas, 1).setNumberFormat('@');
     });
+  } else if (String(h.getRange(1, cols.length, 1, 1).getValues()[0][0]) !== cols[cols.length - 1]) {
+    // hoja de una versión anterior: se ponen al día las cabeceras (por ejemplo, la columna nueva "IVA %")
+    h.getRange(1, 1, 1, cols.length).setValues([cols]);
+    try { h.getRange(1, 1, 1, cols.length).setFontWeight('bold'); } catch (e) {}
   }
   return h;
 }
@@ -207,8 +212,34 @@ function filaPresupuesto(f) {
   return {
     id: sinGuardia(f[0]), numero: sinGuardia(f[1]), fecha: sinGuardia(f[2]), obra: sinGuardia(f[3]), cliente: sinGuardia(f[4]),
     direccion: sinGuardia(f[5]), tipo: sinGuardia(f[6]), estado: sinGuardia(f[7]) || 'Borrador', margen: n(f[8]), base: n(f[9]),
-    iva: n(f[10]), total: n(f[11]), autor: sinGuardia(f[12]), pdf: sinGuardia(f[13]), modificado: sinGuardia(f[14]), notas: sinGuardia(f[15])
+    iva: n(f[10]), total: n(f[11]), autor: sinGuardia(f[12]), pdf: sinGuardia(f[13]), modificado: sinGuardia(f[14]), notas: sinGuardia(f[15]),
+    ivaPct: ivaValido(f[16], 21)   // las filas antiguas no tienen este dato: eran todas al 21 %
   };
+}
+
+function ivaValido(v, porDefecto) {
+  var x = (v === '' || v === null || v === undefined) ? NaN : Number(v);
+  return (x === 21 || x === 10 || x === 0) ? x : porDefecto;
+}
+
+// Número de presupuesto correlativo por año (P-2026-001, P-2026-002…), el mismo para todos los usuarios
+function numeroSiguiente(ss, req) {
+  var anio = parseInt(req.anio, 10);
+  if (!(anio >= 2000 && anio <= 2100)) throw new Error('Año no válido');
+  var props = PropertiesService.getScriptProperties();
+  var clave = 'NUM_' + anio;
+  var actual = parseInt(props.getProperty(clave), 10) || 0;
+  // por si ya hay números puestos a mano o de antes, se parte del mayor que exista en la hoja
+  var re = new RegExp('^P-' + anio + '-(\\d{1,6})$');
+  leer(hoja(ss, 'Presupuestos'), 'Presupuestos').forEach(function (f) {
+    var m = re.exec(sinGuardia(f[1]));
+    if (m) actual = Math.max(actual, parseInt(m[1], 10));
+  });
+  actual += 1;
+  props.setProperty(clave, String(actual));
+  var num = String(actual);
+  while (num.length < 3) num = '0' + num;
+  return { ok: true, numero: 'P-' + anio + '-' + num };
 }
 
 function idValido(id) {
@@ -257,7 +288,7 @@ function guardar(ss, req) {
   var nueva = [
     id, t(p.numero, 40), t(p.fecha, 20), t(p.obra, 200), t(p.cliente, 200), t(p.direccion, 250), t(p.tipo, 100),
     ESTADOS.indexOf(estado) >= 0 ? estado : 'Borrador',
-    n(p.margen), n(p.base), n(p.iva), n(p.total), t(p.autor, 60), pdf, ahora(ss), t(p.notas, 2000)
+    n(p.margen), n(p.base), n(p.iva), n(p.total), t(p.autor, 60), pdf, ahora(ss), t(p.notas, 2000), ivaValido(p.ivaPct, 21)
   ];
   if (i >= 0) filas[i] = nueva; else filas.push(nueva);
   escribirTodo(hp, 'Presupuestos', filas, filas.length - (i >= 0 ? 0 : 1));
