@@ -179,6 +179,23 @@ audio{width:100%;margin-top:14px;border-radius:8px}
 .p-num-val:focus{background:rgba(245,158,11,.1);border-radius:3px}
 .p-unit-badge{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase}
 .p-total-badge{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:5px 10px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--accent);margin-left:auto}
+.p-flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.p-origen{font-size:11px;font-weight:600;border-radius:6px;padding:3px 8px;display:inline-block}
+.o-pre{background:rgba(16,185,129,.14);color:var(--green)}
+.o-ia{background:rgba(245,158,11,.14);color:var(--accent)}
+.o-man{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
+.o-conf{background:rgba(239,68,68,.14);color:var(--red)}
+.p-aviso{font-size:11px;font-weight:600;border-radius:6px;padding:3px 8px;display:inline-block}
+.p-extra{width:100%;margin-top:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text2);font-family:'Inter',sans-serif;font-size:12px;padding:6px 8px;outline:none}
+.p-extra:focus{border-color:var(--accent)}
+.pend-list{margin:6px 0 0 18px;padding:0}
+.pend-list li{margin-bottom:4px}
+.prev-doc{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);font-size:26px;text-align:center;padding:4px;gap:2px}
+.prev-doc span{font-size:9px;line-height:1.15;word-break:break-all;overflow:hidden;max-height:32px;color:var(--text2)}
+.salida-opt{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-xs);margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.4}
+.salida-opt input{margin-top:3px;accent-color:var(--accent)}
+.salida-opt small{color:var(--text2);font-size:12px}
+.modo-med .p-price,.modo-med .p-total-badge,.modo-med .summary-card,.modo-med .p-origen,.modo-med .chapter-total,.modo-med .btn-solo-precio{display:none!important}
 
 /* SUMMARY */
 .summary-card{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--radius);padding:18px;margin-top:12px}
@@ -364,11 +381,11 @@ audio{width:100%;margin-top:14px;border-radius:8px}
 
     <!-- PASO 2: MEDIA -->
     <div id="step-2" style="display:none">
-      <div class="info-box">💡 <strong>Consejo:</strong> Haz fotos de cada zona que haya que reformar y graba un audio contando los trabajos. Cuanta más info, mejor presupuesto.</div>
+      <div class="info-box">💡 <strong>Consejo:</strong> Sube fotos de cada zona, los PDF de planos o mediciones y los audios con lo que hay que hacer. Cuanta más información, mejor resultado. La IA solo incluye lo que aparece en lo que le das.</div>
 
       <!-- FOTOS -->
       <div class="card">
-        <div class="card-title">📸 Fotos de la obra</div>
+        <div class="card-title">📸 Fotos, PDF y audios de la obra</div>
         <div class="media-grid">
           <div class="media-btn" onclick="openCamera('photo')">
             <span class="media-btn-icon">📷</span>
@@ -381,10 +398,10 @@ audio{width:100%;margin-top:14px;border-radius:8px}
             <span class="media-btn-sub">Graba la obra</span>
           </div>
           <div class="media-btn" style="grid-column:span 2">
-            <input type="file" accept="image/*,video/*" onchange="addMedia(this)" multiple>
+            <input type="file" accept="image/*,video/*,application/pdf,audio/*,.pdf,.m4a,.mp3,.wav,.ogg,.opus,.aac,.flac" onchange="addMedia(this)" multiple>
             <span class="media-btn-icon">🖼️</span>
-            <span class="media-btn-label">Galería</span>
-            <span class="media-btn-sub">Fotos y vídeos ya hechos</span>
+            <span class="media-btn-label">Archivos</span>
+            <span class="media-btn-sub">Fotos, vídeos, PDF (planos, mediciones) y audios</span>
           </div>
         </div>
         <input type="file" id="camera-input" style="display:none" onchange="addMedia(this)">
@@ -453,7 +470,12 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <div class="card-title">✅ Resumen</div>
         <div id="resumen-obra" style="font-size:14px;color:var(--text2);line-height:1.8"></div>
       </div>
-      <button class="btn" id="gen-btn" onclick="generateBudget()">⚡ Generar presupuesto con IA</button>
+      <div class="card">
+        <div class="card-title">🎯 ¿Qué quieres sacar?</div>
+        <label class="salida-opt"><input type="radio" name="salida" value="presupuesto" checked><span><b>Presupuesto con precios</b><br><small>Partidas, precios, IVA y PDF para el cliente</small></span></label>
+        <label class="salida-opt" style="margin-bottom:0"><input type="radio" name="salida" value="mediciones"><span><b>Solo estado de mediciones</b><br><small>Partidas y cantidades, sin precios. Después puedes añadirle los precios.</small></span></label>
+      </div>
+      <button class="btn" id="gen-btn" onclick="generateBudget()">⚡ Generar con IA</button>
       <div style="margin-top:10px">
         <button class="btn btn-sec" onclick="goStep(3)">← Volver a mediciones</button>
       </div>
@@ -463,6 +485,8 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div id="results-section" style="display:none">
       <div class="result-obra-name" id="res-obra-name"></div>
       <div class="result-obra-meta" id="res-obra-meta"></div>
+      <div id="leido-box"></div>
+      <div id="pendientes-box"></div>
       <div id="chapters-container"></div>
       <div class="summary-card">
         <div class="margin-row">
@@ -494,13 +518,15 @@ audio{width:100%;margin-top:14px;border-radius:8px}
         <div class="field" style="margin-bottom:0"><label>Dirección de la obra</label><input type="text" id="pdf-direccion" maxlength="140" placeholder="Si es distinta del nombre de la obra" oninput="syncPdfFields()" autocomplete="off"></div>
       </div>
       <div class="result-actions">
-        <button class="btn" onclick="downloadPDF()">📄 Descargar PDF</button>
+        <button class="btn" id="btn-pdf-main" onclick="downloadPDF()">📄 Descargar PDF</button>
+        <button class="btn btn-sec" id="btn-pdf-med" onclick="downloadPDF(true)">📐 PDF solo mediciones (sin precios)</button>
+        <button class="btn btn-green" id="btn-valorar" style="display:none" onclick="valorarMediciones()">💶 Añadir precios con la IA</button>
         <button class="btn btn-sec" id="share-pdf-btn" style="display:none" onclick="sharePDF()">📤 Compartir PDF</button>
-        <button class="btn btn-green" onclick="saveToDrive()">☁️ Guardar en Drive</button>
-        <button class="btn btn-green" onclick="saveAllToPreciario()">📚 Guardar todas las partidas en el preciario</button>
-        <button class="btn btn-green" onclick="saveAsTemplate()">📋 Guardar como plantilla</button>
+        <button class="btn btn-green btn-solo-precio" onclick="saveToDrive()">☁️ Guardar en Drive</button>
+        <button class="btn btn-green btn-solo-precio" onclick="saveAllToPreciario()">📚 Guardar todas las partidas en el preciario</button>
+        <button class="btn btn-green btn-solo-precio" onclick="saveAsTemplate()">📋 Guardar como plantilla</button>
         <button class="btn btn-purple" onclick="saveToHistory()">💾 Guardar en historial</button>
-        <button class="btn btn-green" onclick="showCopyModal()">📋 Copiar texto</button>
+        <button class="btn btn-green btn-solo-precio" onclick="showCopyModal()">📋 Copiar texto</button>
         <button class="btn btn-sec" onclick="resetForm()">➕ Nuevo presupuesto</button>
       </div>
     </div>
@@ -980,14 +1006,25 @@ function goStep(n){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
+function contarAdjuntos(){
+  const c={foto:0,pdf:0,audio:0,video:0};
+  uploadedPhotos.forEach(f=>{const t=tipoAdjunto(f);if(c[t]!=null)c[t]++});
+  return c;
+}
 function buildResumen(){
   const nombre=document.getElementById('obra-nombre').value||'Sin nombre';
   const tipo=document.getElementById('obra-tipo').value||'No especificado';
-  const fotos=uploadedPhotos.length;
+  const c=contarAdjuntos();
   const audio=document.getElementById('audio-transcript').value||document.getElementById('text-input').value;
   const meds=mediciones.length;
-  document.getElementById('resumen-obra').innerHTML=
-    `<b>Obra:</b> ${esc(nombre)}<br><b>Tipo:</b> ${tipo}<br><b>Fotos:</b> ${fotos} imagen${fotos!==1?'es':''}<br><b>Descripción:</b> ${audio?'✅ Añadida':'⚠️ No añadida'}<br><b>Mediciones:</b> ${meds} zona${meds!==1?'s':''}`;
+  const partes=[];
+  if(c.foto)partes.push(c.foto+' foto'+(c.foto!==1?'s':'')+(c.foto>MAX_FOTOS_IA?' (la IA leerá las '+MAX_FOTOS_IA+' primeras)':''));
+  if(c.pdf)partes.push(c.pdf+' PDF');
+  if(c.audio)partes.push(c.audio+' audio'+(c.audio!==1?'s':'')+(c.audio>MAX_AUDIOS_IA?' (la IA leerá los '+MAX_AUDIOS_IA+' primeros)':''));
+  let html=`<b>Obra:</b> ${esc(nombre)}<br><b>Tipo:</b> ${esc(tipo)}<br><b>Archivos:</b> ${partes.length?partes.join(', '):'ninguno'}`;
+  if(c.video)html+=`<br><b>Vídeos:</b> ${c.video} (todavía la IA no los lee: descríbelos en el texto)`;
+  html+=`<br><b>Descripción:</b> ${audio?'✅ Añadida':'⚠️ No añadida'}<br><b>Mediciones:</b> ${meds} zona${meds!==1?'s':''}`;
+  document.getElementById('resumen-obra').innerHTML=html;
 }
 
 // ══ INPUT MODE ══
@@ -1101,30 +1138,39 @@ function openCamera(mode){
   else{input.accept='video/*';input.capture='environment'}
   input.click();
 }
+const MAX_ARCHIVOS=40;
+function tipoAdjunto(f){
+  const t=String(f.type||'').toLowerCase(),n=String(f.name||'').toLowerCase();
+  if(t.startsWith('image/'))return'foto';
+  if(t==='application/pdf'||/\.pdf$/.test(n))return'pdf';
+  if(t.startsWith('audio/')||/\.(m4a|mp3|wav|ogg|oga|opus|aac|flac|aiff?|amr)$/.test(n))return'audio';
+  if(t.startsWith('video/')||/\.(mp4|mov|webm|m4v|3gp)$/.test(n))return'video';
+  return'otro';
+}
 function addMedia(input){
-  const newFiles=Array.from(input.files);
-  uploadedPhotos=[...uploadedPhotos,...newFiles].slice(0,8);
+  const nuevos=Array.from(input.files||[]);
+  const validos=nuevos.filter(f=>tipoAdjunto(f)!=='otro');
+  if(validos.length<nuevos.length)showToast('Algún archivo no se añadió: solo fotos, PDF, audio y vídeo',true);
+  const total=uploadedPhotos.length+validos.length;
+  uploadedPhotos=[...uploadedPhotos,...validos].slice(0,MAX_ARCHIVOS);
+  if(total>MAX_ARCHIVOS)showToast('Máximo '+MAX_ARCHIVOS+' archivos: los demás no se añadieron',true);
   renderPhotoPreviews();input.value='';
 }
 // ══ PHOTOS ══
-function addPhotos(input){
-  const newFiles=Array.from(input.files);
-  uploadedPhotos=[...uploadedPhotos,...newFiles].slice(0,8);
-  renderPhotoPreviews();
-  input.value='';
-}
+function addPhotos(input){addMedia(input)}
 function renderPhotoPreviews(){
   const prev=document.getElementById('photo-prev');
+  const icono={pdf:'📄',audio:'🎙️',video:'🎥'};
   prev.innerHTML=uploadedPhotos.map((f,i)=>{
-    const isVideo=f.type.startsWith('video/');
+    const tp=tipoAdjunto(f);
     return`<div class="preview-wrap">
-      ${isVideo
-        ?`<div class="preview-img" style="display:flex;align-items:center;justify-content:center;background:var(--surface2);border-radius:8px;font-size:28px">🎥</div>`
-        :`<img class="preview-img" id="prev-img-${i}" src="">`}
+      ${tp==='foto'
+        ?`<img class="preview-img" id="prev-img-${i}" src="">`
+        :`<div class="preview-img prev-doc">${icono[tp]||'📎'}<span>${esc(String(f.name||'').slice(0,28))}</span></div>`}
       <button class="preview-del" onclick="removePhoto(${i})">✕</button>
     </div>`}).join('');
   uploadedPhotos.forEach((f,i)=>{
-    if(!f.type.startsWith('video/')){
+    if(tipoAdjunto(f)==='foto'){
       const r=new FileReader();r.onload=e=>{const el=document.getElementById('prev-img-'+i);if(el)el.src=e.target.result};r.readAsDataURL(f);
     }
   });
@@ -1283,63 +1329,230 @@ function resizeImage(f,max){
   });
 }
 
+// ══ ARCHIVOS PARA LA IA (fotos, PDF, audio) ══
+const MAX_FOTOS_IA=16,MAX_AUDIOS_IA=3,MAX_PAGINAS_IA=40,MAX_BYTES_IA=17*1024*1024,MAX_AUDIO_BYTES=12*1024*1024,MAX_TEXTO_PAG=6000;
+const MIME_AUDIO={m4a:'audio/aac',mp3:'audio/mp3',wav:'audio/wav',ogg:'audio/ogg',oga:'audio/ogg',opus:'audio/ogg',aac:'audio/aac',flac:'audio/flac',aif:'audio/aiff',aiff:'audio/aiff'};
+function mimeAudio(f){
+  const ext=(String(f.name||'').toLowerCase().match(/\.([a-z0-9]+)$/)||[])[1]||'';
+  if(MIME_AUDIO[ext])return MIME_AUDIO[ext];
+  const t=String(f.type||'').toLowerCase().split(';')[0];
+  const mapa={'audio/mpeg':'audio/mp3','audio/mp3':'audio/mp3','audio/wav':'audio/wav','audio/x-wav':'audio/wav','audio/aac':'audio/aac','audio/mp4':'audio/aac','audio/x-m4a':'audio/aac','audio/ogg':'audio/ogg','audio/flac':'audio/flac','audio/aiff':'audio/aiff'};
+  return mapa[t]||null;
+}
+async function ensurePdfJs(){
+  if(!window.pdfjsLib)await loadScriptOnce('vendor/pdf.min.js');
+  if(!window.pdfjsLib)throw new Error('No se pudo cargar el lector de PDF');
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdf.worker.min.js';
+}
+// Lee un PDF en el navegador: para cada página saca el texto y una imagen (los planos llevan datos que solo se ven en la imagen)
+async function leerPdf(f,maxPag){
+  await ensurePdfJs();
+  const buf=await f.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const total=pdf.numPages,n=Math.min(total,maxPag),paginas=[];
+  for(let i=1;i<=n;i++){
+    const pg=await pdf.getPage(i);
+    const tc=await pg.getTextContent();
+    let txt='',lastY=null;
+    tc.items.forEach(it=>{
+      if(!it.str)return;
+      const y=it.transform?it.transform[5]:0;
+      if(lastY!==null&&Math.abs(y-lastY)>2)txt+='\n';else if(txt&&!/\s$/.test(txt))txt+=' ';
+      txt+=it.str;lastY=y;
+    });
+    const vp0=pg.getViewport({scale:1});
+    const sc=Math.min(2.5,1800/Math.max(vp0.width,vp0.height));   // lado largo de 1800 px: las cotas de los planos se siguen leyendo
+    const vp=pg.getViewport({scale:sc});
+    const c=document.createElement('canvas');c.width=Math.max(1,Math.round(vp.width));c.height=Math.max(1,Math.round(vp.height));
+    const cx=c.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:cx,viewport:vp}).promise;
+    paginas.push({n:i,texto:txt.replace(/[ \t\u00a0]{2,}/g,' ').replace(/\n{2,}/g,'\n').trim().slice(0,MAX_TEXTO_PAG),jpeg:c.toDataURL('image/jpeg',0.72).split(',')[1]});
+    try{pg.cleanup()}catch(e){}
+  }
+  try{pdf.destroy()}catch(e){}
+  return {total,paginas};
+}
+// Prepara lo que se envía a Gemini y avisa de lo que no cabe (nunca se descarta nada en silencio)
+async function prepararAdjuntos(progreso){
+  const parts=[],avisos=[],res={fotos:0,paginas:0,pdfs:0,audios:0};
+  let bytes=0;
+  const cabe=n=>bytes+n<=MAX_BYTES_IA;
+  const add=(p,n)=>{parts.push(p);bytes+=n};
+  const de=t=>uploadedPhotos.filter(f=>tipoAdjunto(f)===t);
+  for(const f of de('audio')){
+    if(res.audios>=MAX_AUDIOS_IA){avisos.push('El audio "'+f.name+'" no se envió: la IA lee '+MAX_AUDIOS_IA+' como máximo');continue}
+    const mime=mimeAudio(f);
+    if(!mime){avisos.push('El audio "'+f.name+'" tiene un formato que la IA no lee (usa mp3, wav, ogg o m4a)');continue}
+    if(f.size>MAX_AUDIO_BYTES){avisos.push('El audio "'+f.name+'" pesa más de 12 MB y no se envió');continue}
+    if(progreso)progreso('Leyendo el audio '+f.name);
+    const b64=await toB64(f);
+    if(!cabe(b64.length)){avisos.push('El audio "'+f.name+'" no cabe en la petición y no se envió');continue}
+    add({text:'[Audio adjunto "'+f.name+'": son instrucciones habladas sobre la obra; escúchalo y úsalo como descripción]'},0);
+    add({inlineData:{mimeType:mime,data:b64}},b64.length);res.audios++;
+  }
+  let pagsRest=MAX_PAGINAS_IA;
+  for(const f of de('pdf')){
+    if(pagsRest<=0){avisos.push('El PDF "'+f.name+'" no se envió: ya se llegó al máximo de '+MAX_PAGINAS_IA+' páginas');continue}
+    try{
+      if(progreso)progreso('Leyendo el PDF '+f.name);
+      const r=await leerPdf(f,pagsRest);
+      let usadas=0;
+      for(const p of r.paginas){
+        const t='[PDF "'+f.name+'", página '+p.n+' de '+r.total+']'+(p.texto?'\nTexto extraído de la página (puede faltar alguna letra: si algo no cuadra, fíate de la imagen):\n'+p.texto:'');
+        if(!cabe(t.length+(p.jpeg||'').length)){avisos.push('El PDF "'+f.name+'": solo cupieron '+usadas+' de '+r.total+' páginas');break}
+        add({text:t},t.length);
+        if(p.jpeg)add({inlineData:{mimeType:'image/jpeg',data:p.jpeg}},p.jpeg.length);
+        usadas++;
+      }
+      pagsRest-=r.paginas.length;res.paginas+=usadas;if(usadas)res.pdfs++;
+      if(r.total>r.paginas.length)avisos.push('El PDF "'+f.name+'" tiene '+r.total+' páginas: se leyeron las '+r.paginas.length+' primeras');
+    }catch(e){console.error(e);avisos.push('No se pudo leer el PDF "'+f.name+'"'+(e&&e.message?' ('+e.message+')':''))}
+  }
+  const fotos=de('foto');
+  for(const f of fotos){
+    if(res.fotos>=MAX_FOTOS_IA){avisos.push('Solo se enviaron las '+MAX_FOTOS_IA+' primeras fotos ('+fotos.length+' subidas)');break}
+    try{
+      const b64=await resizeImage(f);
+      if(!cabe(b64.length)){avisos.push('Algunas fotos no cupieron en la petición ('+res.fotos+' de '+fotos.length+' enviadas)');break}
+      add({inlineData:{mimeType:'image/jpeg',data:b64}},b64.length);res.fotos++;
+    }catch(e){avisos.push('No se pudo leer la foto "'+f.name+'"')}
+  }
+  return {parts,avisos,res};
+}
+
+// ══ PROMPT DE LA IA ══
+function contextoPreciario(zona){
+  DB=getDB();
+  const items=preciosDeZona(DB.preciario||[],zona).slice(-200);
+  let ctx='';
+  if(items.length>0){ctx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si una partida aparece con precio general y con precio de zona, usa el de la zona):\n';items.forEach(p=>{ctx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
+  return {items,ctx};
+}
+function promptSistema(o){
+  const zona=o.zona||'',med=o.modo==='mediciones';
+  return `Eres un experto en presupuestos y estados de mediciones de reformas y construcción en España (${zona||'Barcelona'}, 2026). Devuelve solo JSON válido, sin markdown. Escribe siempre en castellano, aunque los documentos estén en catalán u otro idioma.
+
+REGLAS (obligatorias):
+1. Incluye SOLO los trabajos que aparecen en la descripción, los documentos adjuntos (planos, dossier, estado de mediciones), los audios, las fotos o las mediciones reales. No añadas por tu cuenta instalaciones, materiales ni trabajos que no consten (por ejemplo climatización, ventanas exteriores, persianas, suelos nuevos o demoliciones que nadie ha pedido).
+2. Si algo es habitual en una obra así pero no consta, NO lo pongas como partida: anótalo en "pendientes" como pregunta para confirmar.
+3. Respeta las medidas y cantidades de los documentos tal cual (metros, unidades, "puertas descontadas", etc.). No las redondees ni las inventes. Si falta una medida, pon cantidad 0 y anótalo en "pendientes".
+4. Si el texto dice "sin suministro", "sense suministre" o que el material lo pone el cliente, la partida es solo de instalación o mano de obra y debe decirlo en la descripción. Si dice "con suministro" o no aclara nada, es suministro e instalación.
+5. Cada partida lleva una descripción técnica clara. Cuando proceda, pon en "no_incluye" lo que NO entra en esa partida (sin repetir "No incluye"; por ejemplo: "el suministro del sanitario").
+6. No dupliques: si dos partidas pueden solaparse (por ejemplo un baño completo y su mobiliario), déjalas claras y anótalo en "pendientes".
+7. Agrupa por capítulos y subcapítulos, con códigos 1, 1.1, 1.1.1…
+8. Usa las mediciones reales si se proporcionan.${zona?` La obra está en la zona: ${zona}.`:''}
+${med?`
+MODO ESTADO DE MEDICIONES: no pongas precios (precio_unitario siempre 0). Lo importante es que cada partida tenga descripción completa, unidad y medición exacta.`:`
+PRECIOS: euros sin IVA, mano de obra y materiales, calidad media${zona?', mercado de '+zona:''}. Usa el PRECIARIO PROPIO cuando una partida coincida (el precio exacto del preciario y su misma unidad). Si no está en el preciario, estima un precio de mercado prudente: una persona los revisará.`}${med?'':(o.precCtx||'')}${o.medCtx||''}
+Formato:
+{"obra":"","tipo":"","capitulos":[{"nombre":"","subcapitulos":[{"nombre":"","partidas":[{"codigo":"1.1.1","descripcion":"","no_incluye":"","cantidad":0,"unidad":"M2","precio_unitario":0}]}]}],"pendientes":[""],"notas":""}`;
+}
+function limpiarGenerado(g,modo){
+  g.pendientes=(Array.isArray(g.pendientes)?g.pendientes:[]).map(x=>String(x||'').trim().slice(0,300)).filter(Boolean).slice(0,40);
+  (g.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{
+    p.no_incluye=String(p.no_incluye||'').trim().replace(/^no incluye[:\s]+/i,'').slice(0,300);
+    if(modo==='mediciones')p.precio_unitario=0;
+  })));
+}
+
 // ══ GENERATE ══
 async function generateBudget(){
   const nombre=document.getElementById('obra-nombre').value.trim();
   const tipo=document.getElementById('obra-tipo').value;
   const zona=zonaActual();
+  const modo=((document.querySelector('input[name="salida"]:checked')||{}).value==='mediciones')?'mediciones':'presupuesto';
   try{localStorage.setItem('pia_zona',zona)}catch(e){}
   const audioText=document.getElementById('audio-transcript').value.trim();
   const textInput=document.getElementById('text-input').value.trim();
   const desc=currentInputMode==='audio'?audioText:textInput;
 
-  if(!desc&&uploadedPhotos.length===0){showToast('Añade fotos o una descripción en el paso 2',true);goStep(2);return}
+  if(!desc&&uploadedPhotos.length===0){showToast('Añade archivos o una descripción en el paso 2',true);goStep(2);return}
   if(!getAI().key&&driveConectado()){try{await pullAiShared()}catch(e){console.error(e.message)}}
   if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);showTab('ajustes');return}
 
-  // Preciario (si Drive está conectado, se refresca primero; si falla se usa la copia de este dispositivo)
-  if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
-  DB=getDB();
-  const precItems=preciosDeZona(DB.preciario||[],zona).slice(-200);
+  // Preciario (solo para el presupuesto con precios; si Drive está conectado, se refresca primero)
   let precCtx='';
-  if(precItems.length>0){precCtx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si una partida aparece con precio general y con precio de zona, usa el de la zona):\n';precItems.forEach(p=>{precCtx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
+  if(modo==='presupuesto'){
+    if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
+    precCtx=contextoPreciario(zona).ctx;
+  }
 
   // Mediciones
   let medCtx='';
   const medsValidas=mediciones.filter(m=>m.zona&&m.valor);
   if(medsValidas.length>0){medCtx='\n\nMEDICIONES REALES:\n';medsValidas.forEach(m=>{medCtx+=`- ${m.zona}: ${m.valor} ${m.unidad}\n`})}
 
-  document.getElementById('loading-overlay').classList.add('active');
+  const titulo=modo==='mediciones'?'Generando el estado de mediciones…':'Generando presupuesto…';
+  setOverlay(titulo,'Leyendo lo que has subido');
 
-  const sys=`Eres un experto en presupuestos de reformas y construcción en España (${zona||'Barcelona'}, 2026). Analiza la descripción y devuelve un presupuesto en JSON puro sin markdown.
-Reglas: precios mercado España 2026 sin IVA, agrupa por capítulos y subcapítulos, descripciones detalladas, usa las mediciones reales si se proporcionan.${zona?` La obra está en la zona: ${zona}. Los precios que no vengan del preciario ajústalos a los precios de mercado de esa zona.`:''}${precCtx}${medCtx}
-Formato:
-{"obra":"","tipo":"","capitulos":[{"nombre":"","subcapitulos":[{"nombre":"","partidas":[{"codigo":"1.1.1","descripcion":"","cantidad":0,"unidad":"M2","precio_unitario":0}]}]}],"notas":""}`;
+  const sys=promptSistema({zona,modo,precCtx,medCtx});
+  const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc||'(ver archivos adjuntos)'}\n${modo==='mediciones'?'Genera el estado de mediciones (sin precios)':'Genera el presupuesto completo'} en JSON.`;
 
-  const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc||'(ver fotos adjuntas)'}\nGenera el presupuesto completo en JSON.`;
-
+  let adj=null;
   try{
-    // Solo fotos — los vídeos no se pueden enviar a la IA directamente
-    const soloFotos=uploadedPhotos.filter(f=>f.type.startsWith('image/'));
-    const tieneVideo=uploadedPhotos.some(f=>f.type.startsWith('video/'));
-    const videoNote=tieneVideo?'\n[El usuario también grabó vídeo de la obra — tenlo en cuenta para inferir más contexto]':'';
-    const parts=[];
-    for(const f of soloFotos.slice(0,4)){parts.push({inlineData:{mimeType:'image/jpeg',data:await resizeImage(f)}})}
-    parts.push({text:upr+videoNote});
+    adj=await prepararAdjuntos(t=>setOverlay(titulo,t));
+    setOverlay(titulo,'La IA está analizando la obra');
+    const parts=adj.parts.slice();
+    parts.push({text:upr});
     const t=await callGemini(sys,parts);
     generatedData=parseBudgetJSON(t);
+    limpiarGenerado(generatedData,modo);
     generatedData._obra=nombre;generatedData._tipo=tipo;generatedData._zona=zona;
-    document.getElementById('loading-overlay').classList.remove('active');
+    generatedData._modo=modo;generatedData._gen=true;
+    generatedData._leido={fotos:adj.res.fotos,pdfs:adj.res.pdfs,paginas:adj.res.paginas,audios:adj.res.audios,avisos:adj.avisos.slice(0,10)};
+    hideOverlay();
     // Ocultar pasos y mostrar resultados
     for(let i=1;i<=4;i++){const el=document.getElementById('step-'+i);if(el)el.style.display='none'}
     document.getElementById('step-indicator').style.display='none';
     document.getElementById('results-section').style.display='block';
     renderResults(generatedData);
+    if(adj.avisos.length)showToast(adj.avisos[0]+(adj.avisos.length>1?' (+'+(adj.avisos.length-1)+' avisos más abajo)':''),true);
   }catch(e){
-    document.getElementById('loading-overlay').classList.remove('active');
-    showToast(e.message,true);
+    hideOverlay();
+    let m=e.message||'Error';
+    if(/\(400\)/.test(m)&&adj&&adj.res.audios)m+='. Puede ser el formato del audio: prueba con mp3, wav u ogg, o quítalo';
+    showToast(m,true);
     console.error(e);
   }
+}
+
+// Segunda fase: poner precios a un estado de mediciones ya generado
+function parsePrecios(t){
+  let s=String(t).replace(/```json|```/g,'').trim(),o;
+  try{o=JSON.parse(s)}catch{const i=s.indexOf('{'),j=s.lastIndexOf('}');try{o=JSON.parse(s.slice(i,j+1))}catch{o=null}}
+  if(!o||!Array.isArray(o.precios))throw new Error('La IA no devolvió precios legibles. Inténtalo otra vez');
+  return o.precios;
+}
+async function valorarMediciones(){
+  if(!generatedData||generatedData._modo!=='mediciones')return;
+  if(!getAI().key&&driveConectado()){try{await pullAiShared()}catch(e){console.error(e.message)}}
+  if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);showTab('ajustes');return}
+  const zona=generatedData._zona||'';
+  setOverlay('Poniendo precios…','La IA valora cada partida');
+  try{
+    if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
+    const {ctx}=contextoPreciario(zona);
+    const lista=[],refs=[];
+    (generatedData.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{
+      if(p._del)return;
+      lista.push({id:refs.length,descripcion:String(p.descripcion||'').slice(0,400),no_incluye:p.no_incluye||'',cantidad:Number(p.cantidad)||0,unidad:p.unidad||''});
+      refs.push(p);
+    })));
+    if(!refs.length)throw new Error('No hay partidas a las que poner precio');
+    const sys=`Eres un experto en presupuestos de reformas y construcción en España (${zona||'Barcelona'}, 2026). Te paso las partidas de un estado de mediciones y debes poner un precio unitario a cada una. Devuelve solo JSON válido: {"precios":[{"id":0,"precio_unitario":0}]}.
+Precios en euros sin IVA, mano de obra y materiales, calidad media. Si la partida dice "sin suministro", es solo instalación o mano de obra. Usa el PRECIARIO PROPIO cuando una partida coincida (precio exacto y misma unidad). Si no está, estima un precio de mercado prudente: una persona lo revisará. No cambies cantidades ni añadas partidas.${ctx}`;
+    const t=await callGemini(sys,[{text:JSON.stringify(lista)}],16000);
+    const precios=parsePrecios(t);
+    let puestos=0;
+    precios.forEach(x=>{
+      const k=Number(x&&x.id),pr=Number(x&&x.precio_unitario);
+      if(Number.isInteger(k)&&refs[k]&&isFinite(pr)&&pr>=0){refs[k].precio_unitario=pr;delete refs[k]._pm;puestos++}
+    });
+    generatedData._modo='presupuesto';generatedData._gen=true;
+    hideOverlay();
+    renderResults(generatedData);
+    showToast(puestos<refs.length?'Precios puestos a '+puestos+' de '+refs.length+' partidas: revisa las que quedan a 0':'Precios puestos ✓ Revísalos antes de enviar',puestos<refs.length);
+  }catch(e){hideOverlay();showToast(e.message,true);console.error(e)}
 }
 
 function toB64(f){return new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f)})}
@@ -1349,6 +1562,8 @@ function renderResults(data){
   document.getElementById('res-obra-name').textContent=data._obra||'Presupuesto';
   document.getElementById('res-obra-meta').textContent=(data._tipo||'')+'  ·  '+new Date().toLocaleDateString('es-ES');
   const container=document.getElementById('chapters-container');container.innerHTML='';
+  const med=data._modo==='mediciones';
+  const items=data._gen?preciosDeZona((getDB()||{}).preciario||[],data._zona||''):null;
   let total=0;
   (data.capitulos||[]).forEach((cap,ci)=>{
     let ct=0;
@@ -1370,17 +1585,19 @@ function renderResults(data){
           </div>
           <div class="p-numbers">
             <div class="p-num-item">
-              <span class="p-num-label">Cant</span>
+              <span class="p-num-label">${med?'Medición':'Cant'}</span>
               <input class="p-num-val" type="number" value="${Number(p.cantidad)||0}" onchange="recalcRow('${id}')" data-field="qty">
             </div>
             <div class="p-unit-badge">${esc(p.unidad)}</div>
-            <div class="p-num-item">
+            <div class="p-num-item p-price">
               <span class="p-num-label">€/ud</span>
               <input class="p-num-val" type="number" value="${(Number(p.precio_unitario)||0).toFixed(2)}" onchange="recalcRow('${id}')" data-field="price">
             </div>
             <div class="p-total-badge" id="${id}-total">${fmtEUR(t)}</div>
           </div>
-          <button class="btn btn-sm btn-sec" style="margin-top:8px;padding:6px 12px;font-size:13px" id="${id}-prec" onclick="savePartidaToPreciario('${id}')">📚 Guardar en preciario</button>
+          <div class="p-flags" id="${id}-flags">${flagsPartida(p,items)}</div>
+          <input class="p-extra" data-field="ni" maxlength="300" placeholder="Qué NO incluye esta partida (opcional)" value="${esc(p.no_incluye||'')}" onchange="recalcRow('${id}')">
+          <button class="btn btn-sm btn-sec btn-solo-precio" style="margin-top:8px;padding:6px 12px;font-size:13px" id="${id}-prec" onclick="savePartidaToPreciario('${id}')">📚 Guardar en preciario</button>
         </div>`;
       });
       sh+=`<div class="sub-block"><div class="sub-title">📁 ${esc(sub.nombre)}</div>${sx}</div>`;
@@ -1391,6 +1608,13 @@ function renderResults(data){
   });
   generatedData._baseTotal=total;
   if(data.notas){const n=document.createElement('div');n.className='info-box';n.innerHTML=`<strong>⚠️ Notas:</strong> ${esc(data.notas)}`;container.appendChild(n)}
+  const rs=document.getElementById('results-section');
+  rs.classList.toggle('modo-med',med);
+  const bMain=document.getElementById('btn-pdf-main'),bVal=document.getElementById('btn-valorar'),bMed=document.getElementById('btn-pdf-med');
+  if(bMain)bMain.style.display=med?'none':'';
+  if(bVal)bVal.style.display=med?'':'none';
+  if(bMed){bMed.className=med?'btn':'btn btn-sec';bMed.textContent=med?'📐 Descargar PDF de mediciones':'📐 PDF solo mediciones (sin precios)'}
+  renderPendientes();renderLeido();
   document.getElementById('margin-pct').value=0;
   document.getElementById('pdf-cliente').value=data._cliente||'';
   document.getElementById('pdf-direccion').value=data._direccion||'';
@@ -1399,6 +1623,47 @@ function renderResults(data){
   document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function itemsPrecioActuales(){return generatedData&&generatedData._gen?preciosDeZona((getDB()||{}).preciario||[],generatedData._zona||''):null}
+// De dónde sale el precio de una partida: de tu preciario, estimado por la IA o puesto a mano
+function origenPrecio(p,items){
+  if(p._pm)return'man';
+  const pr=Number(p.precio_unitario)||0,u=String(p.unidad||'').trim().toUpperCase();
+  return (items||[]).some(it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u)?'pre':'ia';
+}
+function flagsPartida(p,items){
+  let h='';
+  if(items){
+    const o=origenPrecio(p,items);
+    h+=o==='pre'?'<span class="p-origen o-pre">📚 Precio de tu preciario</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
+  }
+  if(!(Number(p.cantidad)>0))h+='<span class="p-aviso o-conf">⚠️ Sin medición: confírmala</span>';
+  return h;
+}
+function renderPendientes(){
+  const el=document.getElementById('pendientes-box');if(!el||!generatedData)return;
+  const l=generatedData.pendientes||[];
+  el.innerHTML=l.length?`<div class="info-box"><strong>❓ Por confirmar</strong> (la IA no lo ha incluido o no estaba claro)<ul class="pend-list">${l.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`:'';
+}
+function renderLeido(){
+  const el=document.getElementById('leido-box');if(!el||!generatedData)return;
+  const g=generatedData,L=g._leido;
+  if(!g._gen){el.innerHTML='';return}
+  let h='';
+  if(L){
+    const p=[];
+    if(L.pdfs)p.push(L.pdfs+' PDF ('+L.paginas+' página'+(L.paginas!==1?'s':'')+')');
+    if(L.fotos)p.push(L.fotos+' foto'+(L.fotos!==1?'s':''));
+    if(L.audios)p.push(L.audios+' audio'+(L.audios!==1?'s':''));
+    h+='<div>🔎 <strong>La IA ha leído:</strong> '+(p.length?esc(p.join(', ')):'solo el texto')+'</div>';
+    (L.avisos||[]).forEach(a=>{h+='<div style="color:var(--red);margin-top:4px">⚠️ '+esc(a)+'</div>'});
+  }
+  if(g._modo!=='mediciones'){
+    const items=itemsPrecioActuales();let n={pre:0,ia:0,man:0};
+    (g.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{if(!p._del)n[origenPrecio(p,items)]++})));
+    h+='<div style="margin-top:6px">💶 <strong>Precios:</strong> '+n.pre+' de tu preciario, '+n.ia+' estimados por la IA'+(n.man?', '+n.man+' puestos por ti':'')+'. Los estimados no tienen una fuente fiable: contrástalos con tus proveedores.</div>';
+  }
+  el.innerHTML=h?'<div class="info-box">'+h+'</div>':'';
+}
 function fmtEUR(n){return n.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'}
 // Devuelve la partida de los datos reales que corresponde a una tarjeta de pantalla (id p_capítulo_subcapítulo_partida)
 function partidaRef(id){
@@ -1415,8 +1680,13 @@ function recalcRow(id){
   // Lo que escribes a mano pasa a los datos reales (copia, historial, PDF…)
   const p=partidaRef(id);
   if(p){
+    // Si cambias el precio a mano, pasa a ser "tuyo" (una diferencia de céntimos por redondeo no cuenta)
+    if(Math.abs(price-(Number(p.precio_unitario)||0))>0.005)p._pm=1;
     p.cantidad=qty;p.precio_unitario=price;
     const d=row.querySelector('.p-desc');if(d)p.descripcion=d.value;
+    const ni=row.querySelector('[data-field="ni"]');if(ni)p.no_incluye=ni.value.slice(0,300);
+    const fl=document.getElementById(id+'-flags');if(fl)fl.innerHTML=flagsPartida(p,itemsPrecioActuales());
+    renderLeido();
   }
   const el=document.getElementById(id+'-total');
   if(el)el.textContent=fmtEUR(qty*price);
@@ -1465,7 +1735,7 @@ function updateSummary(){
 function delRow(id){
   const p=partidaRef(id);if(p)p._del=true;
   const el=document.getElementById(id);if(el)el.remove();
-  recalcAll();
+  recalcAll();renderLeido();
 }
 
 // ══ DRIVE COMPARTIDO (hoja de Google + script, ver drive/LEEME.md) ══
@@ -1620,7 +1890,7 @@ function budgetPayload(r){
   })));
   return{
     presupuesto:{id:g._id,numero:g._numero,fecha:g._fecha,obra:g._obra||'',cliente:g._cliente||'',direccion:g._direccion||'',tipo:g._tipo||'',
-      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,ivaPct:r.ivaPct,autor:currentUser?currentUser.username:'',notas:(g._zona?'Zona: '+g._zona+'. ':'')+(g.notas||'')},
+      margen:parseFloat(document.getElementById('margin-pct').value)||0,base:r.base,iva:r.iva,total:r.total,ivaPct:r.ivaPct,autor:currentUser?currentUser.username:'',notas:(g._zona?'Zona: '+g._zona+'. ':'')+(g.notas||'')+((g.pendientes&&g.pendientes.length)?' Por confirmar: '+g.pendientes.join(' | '):'')},
     partidas
   };
 }
@@ -1814,8 +2084,9 @@ function pdfText(s){
 function slugFile(s){
   return String(s||'obra').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'obra';
 }
-async function buildBudgetPDF(){
+async function buildBudgetPDF(opt){
   if(!generatedData)throw new Error('No hay ningún presupuesto abierto');
+  const med=!!(opt&&opt.mediciones);   // estado de mediciones: sin precios ni totales
   await ensurePdfLibs();
   const jsPDF=window.jspdf.jsPDF;
   const emp=getEmpresa();
@@ -1824,7 +2095,7 @@ async function buildBudgetPDF(){
   const mp=parseFloat(document.getElementById('margin-pct').value)||0;
   // Número y fecha: se fijan la primera vez y se conservan si se guarda en el historial
   const now=new Date();const p2=n=>String(n).padStart(2,'0');
-  if(!generatedData._numero){
+  if(!med&&!generatedData._numero){
     // Número correlativo (P-2026-001…) pedido a Drive; si no hay conexión, uno provisional con la fecha y la hora
     let num='';
     if(driveConectado()){try{num=String((await driveCall('numero.siguiente',{anio:now.getFullYear()})).numero||'')}catch(e){console.error(e.message)}}
@@ -1835,6 +2106,9 @@ async function buildBudgetPDF(){
     generatedData._numero=num;
   }
   if(!generatedData._fecha)generatedData._fecha=p2(now.getDate())+'/'+p2(now.getMonth()+1)+'/'+now.getFullYear();
+  // El estado de mediciones lleva su propia referencia y no gasta un número de presupuesto
+  if(med&&!generatedData._numeroEM)generatedData._numeroEM='EM-'+now.getFullYear()+p2(now.getMonth()+1)+p2(now.getDate())+'-'+p2(now.getHours())+p2(now.getMinutes());
+  const numDoc=med?generatedData._numeroEM:generatedData._numero;
 
   const doc=new jsPDF({unit:'mm',format:'a4'});
   const W=210,H=297,M=15,CW=W-2*M;
@@ -1859,10 +2133,10 @@ async function buildBudgetPDF(){
   det.forEach(l=>{doc.splitTextToSize(l,100).forEach(x=>{doc.text(x,M,yL);yL+=4.2})});
 
   let yR=M;
-  doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(...NAVY);
-  doc.text('PRESUPUESTO',W-M,yR+6,{align:'right'});yR+=12;
+  doc.setFont('helvetica','bold');doc.setFontSize(med?15:20);doc.setTextColor(...NAVY);
+  doc.text(med?'ESTADO DE MEDICIONES':'PRESUPUESTO',W-M,yR+6,{align:'right'});yR+=12;
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GRAY);
-  [['Nº',generatedData._numero],['Fecha',generatedData._fecha],['Validez',validez+' días']].forEach(r=>{
+  [['Nº',numDoc],['Fecha',generatedData._fecha]].concat(med?[]:[['Validez',validez+' días']]).forEach(r=>{
     doc.text(r[0]+':  ',W-M-doc.getTextWidth(T(r[1])),yR,{align:'right'});
     doc.setFont('helvetica','bold');doc.setTextColor(...NAVY);doc.text(T(r[1]),W-M,yR,{align:'right'});
     doc.setFont('helvetica','normal');doc.setTextColor(...GRAY);yR+=4.8;
@@ -1896,29 +2170,33 @@ async function buildBudgetPDF(){
     (cap.subcapitulos||[]).forEach(sub=>{
       const ps=(sub.partidas||[]).filter(p=>!p._del);
       if(!ps.length)return;
-      rows.push([{content:T(sub.nombre),colSpan:6,styles:{fontStyle:'bold',fillColor:LIGHT,textColor:NAVY,fontSize:8.5,halign:'left'}}]);
+      rows.push([{content:T(sub.nombre),colSpan:med?4:6,styles:{fontStyle:'bold',fillColor:LIGHT,textColor:NAVY,fontSize:8.5,halign:'left'}}]);
       ps.forEach(p=>{
         const q=Number(p.cantidad)||0;
+        const ni=T(p.no_incluye).replace(/^no incluye[:\s]+/i,'');
+        const desc=T(p.descripcion)+(ni?'\nNo incluye: '+ni:'');
+        if(med){rows.push([T(p.codigo),desc,fmtQty(q),T(p.unidad)]);return}
         const pu=round2((Number(p.precio_unitario)||0)*(1+mp/100));
         const imp=round2(q*pu);ct+=imp;
-        rows.push([T(p.codigo),T(p.descripcion),fmtQty(q),T(p.unidad),fmtNum(pu),fmtNum(imp)]);
+        rows.push([T(p.codigo),desc,fmtQty(q),T(p.unidad),fmtNum(pu),fmtNum(imp)]);
       });
     });
     if(!rows.length)return;
     ct=round2(ct);base=round2(base+ct);
     const capStyle={fontStyle:'bold',fillColor:SLATE,textColor:[255,255,255],fontSize:9,halign:'left'};
-    body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:5,styles:capStyle},{content:fmtNum(ct)+' €',styles:{...capStyle,halign:'right'}}]);
+    if(med)body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:4,styles:capStyle}]);
+    else body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:5,styles:capStyle},{content:fmtNum(ct)+' €',styles:{...capStyle,halign:'right'}}]);
     rows.forEach(r=>body.push(r));
   });
   const isHdr=body.map(r=>typeof r[0]==='object');
   const tableOpts=(startY,rows,onRow)=>({
     startY,margin:{top:M,left:M,right:M,bottom:22},
-    head:[['Cód.','Descripción','Cant.','Ud.','Precio ud.','Importe']],body:rows,
+    head:[med?['Cód.','Descripción','Medición','Ud.']:['Cód.','Descripción','Cant.','Ud.','Precio ud.','Importe']],body:rows,
     theme:'plain',showHead:'everyPage',rowPageBreak:'avoid',
     styles:{font:'helvetica',fontSize:8.5,cellPadding:2,textColor:[40,48,60],valign:'middle',lineColor:[225,229,236],lineWidth:{bottom:0.2}},
     headStyles:{fillColor:NAVY,textColor:[255,255,255],fontStyle:'bold',fontSize:8,lineWidth:0},
-    columnStyles:{0:{cellWidth:17},1:{cellWidth:'auto'},2:{cellWidth:16,halign:'right'},3:{cellWidth:12,halign:'center'},4:{cellWidth:24,halign:'right'},5:{cellWidth:26,halign:'right'}},
-    didParseCell:d=>{if(d.section==='head')d.cell.styles.halign=['left','left','right','center','right','right'][d.column.index]},
+    columnStyles:med?{0:{cellWidth:17},1:{cellWidth:'auto'},2:{cellWidth:26,halign:'right'},3:{cellWidth:14,halign:'center'}}:{0:{cellWidth:17},1:{cellWidth:'auto'},2:{cellWidth:16,halign:'right'},3:{cellWidth:12,halign:'center'},4:{cellWidth:24,halign:'right'},5:{cellWidth:26,halign:'right'}},
+    didParseCell:d=>{if(d.section==='head')d.cell.styles.halign=(med?['left','left','right','center']:['left','left','right','center','right','right'])[d.column.index]},
     didDrawCell:d=>{if(onRow&&d.section==='body'&&d.column.index===0)onRow(d.row.index,d.pageNumber)}
   });
   // Dibuja la tabla en tramos; cada salto fuerza página nueva (para que un título de capítulo o subcapítulo no quede solo al final de una hoja)
@@ -1950,7 +2228,13 @@ async function buildBudgetPDF(){
 
   // ── Totales ──
   const need=(h)=>{if(y+h>H-22){doc.addPage();y=M}};
-  const ipc=ivaPct(),iva=round2(base*ipc/100),total=round2(base+iva);
+  let ipc=ivaPct(),iva=0,total=0;
+  if(med){
+    need(16);
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...GRAY);
+    doc.splitTextToSize('Estado de mediciones sin valoración económica. Las mediciones proceden de la documentación facilitada y deben comprobarse en obra antes de contratar.',CW).forEach(l=>{doc.text(l,M,y);y+=4});
+  }else{
+  iva=round2(base*ipc/100);total=round2(base+iva);
   need(36);
   const bx=W-M-84;
   doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...NAVY);
@@ -1981,6 +2265,7 @@ async function buildBudgetPDF(){
   doc.text('CONFORME DEL CLIENTE',M+4,y+5.5);doc.text('POR LA EMPRESA',M+bw+10,y+5.5);
   doc.setFont('helvetica','normal');doc.setFontSize(8);
   doc.text('Fecha y firma:',M+4,y+bh-4);doc.text(empNombre,M+bw+10,y+bh-4);
+  }
 
   // ── Pie de página en todas las hojas ──
   const pages=doc.getNumberOfPages();
@@ -1993,13 +2278,13 @@ async function buildBudgetPDF(){
     doc.text('Página '+i+' de '+pages,W-M,H-9.5,{align:'right'});
   }
   const fecha=(generatedData._fecha||'').split('/').reverse().join('');
-  const filename='Presupuesto_'+slugFile(generatedData._obra)+'_'+fecha+'.pdf';
+  const filename=(med?'Mediciones_':'Presupuesto_')+slugFile(generatedData._obra)+'_'+fecha+'.pdf';
   return {doc,filename,base,iva,total,ivaPct:ipc};
 }
-async function downloadPDF(){
+async function downloadPDF(soloMed){
   try{
     showToast('Generando PDF…');
-    const r=await buildBudgetPDF();
+    const r=await buildBudgetPDF({mediciones:!!soloMed||(generatedData&&generatedData._modo==='mediciones')});
     r.doc.save(r.filename);
     if(!getEmpresa().nombre)showToast('PDF listo. Rellena los datos de tu empresa en Ajustes para que salgan en la cabecera');
     else showToast('PDF descargado ✓');
@@ -2007,7 +2292,7 @@ async function downloadPDF(){
 }
 async function sharePDF(){
   try{
-    const r=await buildBudgetPDF();
+    const r=await buildBudgetPDF({mediciones:!!(generatedData&&generatedData._modo==='mediciones')});
     const file=new File([r.doc.output('blob')],r.filename,{type:'application/pdf'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:r.filename})}
     else{r.doc.save(r.filename)}
@@ -2055,7 +2340,7 @@ function renderHistory(){
   if(!DB.history||DB.history.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Sin presupuestos guardados</div><div class="empty-sub">Los presupuestos que guardes aparecerán aquí</div></div>`;return}
   list.innerHTML=DB.history.map((h,i)=>`
     <div class="hist-item" onclick="openHistModal(${i})">
-      <div class="hist-top"><div class="hist-name">${esc(h.obra)}</div><div class="hist-total">${(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})} €</div></div>
+      <div class="hist-top"><div class="hist-name">${esc(h.obra)}</div><div class="hist-total">${h.data&&h.data._modo==='mediciones'?'Mediciones':(h.total*(1+h.margin/100)).toLocaleString('es-ES',{minimumFractionDigits:2})+' €'}</div></div>
       <div class="hist-meta">${esc(h.tipo)} · ${esc(h.fecha)} · ${esc(h.autor)}</div>
     </div>`).join('');
 }
@@ -2419,6 +2704,8 @@ function resetForm(){
   document.getElementById('obra-nombre').value='';document.getElementById('obra-tipo').value='';
   document.getElementById('audio-transcript').value='';document.getElementById('text-input').value='';
   uploadedPhotos=[];mediciones=[];generatedData=null;
+  const rp=document.querySelector('input[name="salida"][value="presupuesto"]');if(rp)rp.checked=true;
+  const lb=document.getElementById('leido-box'),pb=document.getElementById('pendientes-box');if(lb)lb.innerHTML='';if(pb)pb.innerHTML='';
   renderPhotoPreviews();renderMediciones();
   document.getElementById('results-section').style.display='none';
   document.getElementById('step-indicator').style.display='flex';
