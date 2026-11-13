@@ -1258,28 +1258,38 @@ function friendlyGeminiError(status,d){
   if(status===400&&/api key/i.test(msg))return'La clave de Gemini no es válida. Revísala en Ajustes';
   if(status===401||status===403)return'La clave de Gemini no tiene permiso. Crea otra en aistudio.google.com/apikey';
   if(status===429)return'Has llegado al límite gratuito de Gemini. Espera un minuto o inténtalo mañana';
-  if(status>=500)return'Gemini no responde ahora mismo ('+status+(msg?': '+msg.slice(0,120):'')+'). Inténtalo en unos minutos';
+  if(status>=500)return'Gemini está saturado ahora mismo ('+status+(msg?': '+msg.slice(0,120):'')+'). La app ya lo reintentó varias veces: espera un par de minutos y pulsa Generar otra vez (tus archivos siguen cargados)';
   return'Gemini devolvió un error ('+status+')'+(msg?': '+msg:'');
 }
-async function callGemini(system,parts,maxTokens){
+let GEMINI_ESPERAS=[3000,8000,15000];   // segundos de espera (en ms) antes de cada reintento cuando Gemini está saturado
+async function callGemini(system,parts,maxTokens,onEstado){
   const a=getAI();
   if(!a.key)throw new Error('Falta la clave de Gemini: pégala en Ajustes');
   const modelos=a.model?[a.model]:GEMINI_MODELOS;
   let ultimo=null;
   for(const m of modelos){
-    let r;
-    try{
-      r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(m)+':generateContent',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':a.key},
-        body:JSON.stringify({
-          systemInstruction:{parts:[{text:system}]},
-          contents:[{role:'user',parts}],
-          generationConfig:{responseMimeType:'application/json',temperature:0.3,maxOutputTokens:maxTokens||24000}
-        })
-      });
-    }catch(e){throw new Error('No hay conexión con Gemini. Revisa tu internet')}
-    const d=await r.json().catch(()=>({}));
+    let r,d;
+    // Si Gemini está saturado (error 5xx) se reintenta con esperas cada vez más largas antes de pasar al siguiente modelo
+    for(let intento=0;;intento++){
+      try{
+        r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(m)+':generateContent',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-goog-api-key':a.key},
+          body:JSON.stringify({
+            systemInstruction:{parts:[{text:system}]},
+            contents:[{role:'user',parts}],
+            generationConfig:{responseMimeType:'application/json',temperature:0.3,maxOutputTokens:maxTokens||24000}
+          })
+        });
+      }catch(e){throw new Error('No hay conexión con Gemini. Revisa tu internet')}
+      d=await r.json().catch(()=>({}));
+      if(r.status>=500&&intento<GEMINI_ESPERAS.length){
+        if(onEstado)onEstado('Gemini está saturado: reintentando ('+(intento+1)+' de '+GEMINI_ESPERAS.length+')…');
+        await new Promise(res=>setTimeout(res,GEMINI_ESPERAS[intento]));
+        continue;
+      }
+      break;
+    }
     if(r.status===404){ultimo=new Error('El modelo "'+m+'" no existe. '+(a.model?'Borra el campo Modelo en Ajustes para usar el automático':''));continue}
     if(!r.ok){
       const err=new Error(friendlyGeminiError(r.status,d));
@@ -1494,7 +1504,7 @@ async function generateBudget(){
     setOverlay(titulo,'La IA está analizando la obra');
     const parts=adj.parts.slice();
     parts.push({text:upr});
-    const t=await callGemini(sys,parts);
+    const t=await callGemini(sys,parts,undefined,e=>setOverlay(titulo,e));
     generatedData=parseBudgetJSON(t);
     limpiarGenerado(generatedData,modo);
     generatedData._obra=nombre;generatedData._tipo=tipo;generatedData._zona=zona;
@@ -1541,7 +1551,7 @@ async function valorarMediciones(){
     if(!refs.length)throw new Error('No hay partidas a las que poner precio');
     const sys=`Eres un experto en presupuestos de reformas y construcción en España (${zona||'Barcelona'}, 2026). Te paso las partidas de un estado de mediciones y debes poner un precio unitario a cada una. Devuelve solo JSON válido: {"precios":[{"id":0,"precio_unitario":0}]}.
 Precios en euros sin IVA, mano de obra y materiales, calidad media. Si la partida dice "sin suministro", es solo instalación o mano de obra. Usa el PRECIARIO PROPIO cuando una partida coincida (precio exacto y misma unidad). Si no está, estima un precio de mercado prudente: una persona lo revisará. No cambies cantidades ni añadas partidas.${ctx}`;
-    const t=await callGemini(sys,[{text:JSON.stringify(lista)}],16000);
+    const t=await callGemini(sys,[{text:JSON.stringify(lista)}],16000,e=>setOverlay('Poniendo precios…',e));
     const precios=parsePrecios(t);
     let puestos=0;
     precios.forEach(x=>{
