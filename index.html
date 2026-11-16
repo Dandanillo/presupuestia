@@ -1934,7 +1934,7 @@ async function testDrive(){
   try{
     const d=await driveCall('ping');
     hideOverlay();showToast('✅ Conexión con Drive correcta');
-    st.textContent='✅ Conectado a "'+(d.hoja||'la hoja')+'"';
+    st.textContent='✅ Conectado a "'+(d.hoja||'la hoja')+'" · script versión '+(d.version||'antigua (sin número: falta actualizar)');
   }catch(e){
     hideOverlay();showToast(e.message,true);
     st.textContent='❌ '+e.message;
