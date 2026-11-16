@@ -1842,7 +1842,11 @@ function renderDriveSettings(){
   const c=getDriveCfg();
   document.getElementById('drive-auto').style.display=modoCuentas()?'block':'none';
   document.getElementById('drive-manual').style.display=modoCuentas()?'none':'block';
-  if(modoCuentas()){document.getElementById('drive-status').textContent=c.clave?'✅ Conectado con tu cuenta':'⚠️ Vuelve a entrar con tu usuario y contraseña';return}
+  if(modoCuentas()){
+    const st=document.getElementById('drive-status');
+    st.textContent=c.clave?'✅ Conectado con tu cuenta':'⚠️ Vuelve a entrar con tu usuario y contraseña';
+    if(c.clave)driveCall('ping').then(d=>{st.textContent='✅ Conectado con tu cuenta · script de Drive versión '+(d.version||'antigua (falta actualizar)')}).catch(()=>{});
+    return}
   document.getElementById('drive-url').value=c.url||'';
   const k=document.getElementById('drive-clave');k.value='';
   k.placeholder=c.clave?('Clave guardada (termina en '+c.clave.slice(-4)+'). Pega otra para cambiarla'):'Pega aquí la clave de la pestaña Conexión';
