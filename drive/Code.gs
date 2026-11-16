@@ -12,12 +12,12 @@
  *  - Solo responde a quien conoce la CLAVE secreta (se genera al ejecutar "configurar").
  */
 
-var VERSION = '2.3';
+var VERSION = '2.4';
 
 var COLS = {
   'Presupuestos': ['ID', 'Número', 'Fecha', 'Obra', 'Cliente', 'Dirección', 'Tipo', 'Estado', 'Margen %', 'Base imponible', 'IVA', 'Total', 'Autor', 'PDF', 'Modificado', 'Notas', 'IVA %'],
   'Partidas': ['ID presupuesto', 'Capítulo', 'Subcapítulo', 'Código', 'Descripción', 'Cantidad', 'Unidad', 'Precio unitario', 'Importe'],
-  'Preciario': ['Descripción', 'Unidad', 'Precio', 'Capítulo', 'Zona', 'Autor', 'Modificado'],
+  'Preciario': ['Descripción', 'Unidad', 'Precio', 'Capítulo', 'Zona', 'Autor', 'Modificado', 'Fuente', 'Fecha del precio'],
   'Empresa': ['Clave', 'Valor'],
   'Usuarios': ['Usuario', 'Nombre', 'Correo', 'Teléfono', 'Dirección', 'Rol', 'Creado', 'Último acceso'],
   'Accesos': ['Fecha y hora', 'Usuario', 'Resultado', 'Dispositivo (lo declara el navegador)', 'Detalle'],
@@ -27,7 +27,7 @@ var COLS = {
 var TEXTO = {
   'Presupuestos': [1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15, 16],
   'Partidas': [1, 2, 3, 4, 5, 7],
-  'Preciario': [1, 2, 4, 5, 6, 7],
+  'Preciario': [1, 2, 4, 5, 6, 7, 8, 9],
   'Empresa': [1, 2],
   'Usuarios': [1, 2, 3, 4, 5, 6, 7, 8],
   'Accesos': [1, 2, 3, 4, 5],
@@ -356,7 +356,7 @@ function preciarioListar(ss) {
   return {
     ok: true,
     items: filas.map(function (f) {
-      return { descripcion: sinGuardia(f[0]), unidad: sinGuardia(f[1]), precio: n(f[2]), capitulo: sinGuardia(f[3]), zona: sinGuardia(f[4]), autor: sinGuardia(f[5]), modificado: sinGuardia(f[6]) };
+      return { descripcion: sinGuardia(f[0]), unidad: sinGuardia(f[1]), precio: n(f[2]), capitulo: sinGuardia(f[3]), zona: sinGuardia(f[4]), autor: sinGuardia(f[5]), modificado: sinGuardia(f[6]), fuente: sinGuardia(f[7]), fecha: sinGuardia(f[8]) };
     })
   };
 }
@@ -375,7 +375,8 @@ function preciarioGuardar(ss, req) {
     var desc = t(q.descripcion, 300);
     var precio = n(q.precio);
     if (!desc.trim() || precio <= 0) return;
-    var fila = [desc, t(q.unidad, 20), precio, t(q.capitulo, 100), t(q.zona, 60), t(q.autor, 60), ts];
+    var fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(q.fecha || '')) ? String(q.fecha) : '';   // día en que el proveedor dio ese precio
+    var fila = [desc, t(q.unidad, 20), precio, t(q.capitulo, 100), t(q.zona, 60), t(q.autor, 60), ts, t(q.fuente, 100), fecha];
     var k = norm(desc) + '|' + norm(fila[1]) + '|' + norm(fila[4]);
     if (indice[k] !== undefined) { filas[indice[k]] = fila; actualizadas++; }
     else { indice[k] = filas.length; filas.push(fila); nuevas++; }

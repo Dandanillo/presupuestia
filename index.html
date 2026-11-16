@@ -185,6 +185,13 @@ audio{width:100%;margin-top:14px;border-radius:8px}
 .o-ia{background:rgba(245,158,11,.14);color:var(--accent)}
 .o-man{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
 .o-conf{background:rgba(239,68,68,.14);color:var(--red)}
+.imp-row{background:var(--surface2,var(--surface));border:1.5px solid var(--border);border-radius:var(--radius-xs);padding:10px;margin-bottom:8px}
+.imp-row.off{opacity:.45}
+.imp-top{display:flex;gap:10px;align-items:flex-start}
+.imp-top input[type=checkbox]{margin-top:8px;width:20px;height:20px;flex:none}
+.imp-grid{display:grid;grid-template-columns:70px 1fr;gap:8px;margin-top:8px}
+.imp-grid select,.imp-grid input,.imp-row textarea{width:100%}
+.imp-cap{grid-column:1 / -1}
 .p-aviso{font-size:11px;font-weight:600;border-radius:6px;padding:3px 8px;display:inline-block}
 .p-extra{width:100%;margin-top:6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text2);font-family:'Inter',sans-serif;font-size:12px;padding:6px 8px;outline:none}
 .p-extra:focus{border-color:var(--accent)}
@@ -553,6 +560,11 @@ audio{width:100%;margin-top:14px;border-radius:8px}
     <div class="info-box" id="plant-status" style="margin-bottom:12px"></div>
     <div id="plant-list" style="margin-bottom:18px"></div>
     <div class="card">
+      <div class="card-title">📥 Precios reales de un proveedor</div>
+      <div class="set-row-desc" style="margin-bottom:12px">Sube el presupuesto o la tarifa de un fontanero, electricista, carpintero… La IA copia sus precios (sin inventar ninguno) y tú los revisas antes de guardarlos con el nombre del proveedor y la fecha.</div>
+      <button class="btn btn-green" onclick="abrirImportar()">📥 Importar presupuesto de proveedor</button>
+    </div>
+    <div class="card">
       <div class="card-title">➕ Nueva partida</div>
       <div class="field"><label>Descripción</label><input type="text" id="prec-desc" placeholder="Ej: Impermeabilización con lámina LBM-40"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -723,6 +735,38 @@ audio{width:100%;margin-top:14px;border-radius:8px}
   <div class="loading-spinner"></div>
   <div class="loading-text">Generando presupuesto…</div>
   <div class="loading-sub">La IA está analizando la obra</div>
+</div>
+
+<!-- MODAL IMPORTAR PRECIOS DE PROVEEDOR -->
+<div class="modal-overlay" id="modal-imp">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📥 Importar precios de un proveedor</div>
+    <div id="imp-paso1">
+      <div class="modal-sub">La IA solo copia los precios que salgan en el documento. Después los revisas tú.</div>
+      <div class="field"><label>Proveedor o empresa *</label><input type="text" id="imp-prov" maxlength="100" placeholder="Ej: Fontanería López" autocomplete="off"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Fecha del presupuesto</label><input type="date" id="imp-fecha"></div>
+        <div class="field"><label>Zona (opcional)</label><input type="text" id="imp-zona" maxlength="60" list="zonas-list" placeholder="Ej: Barcelona" autocomplete="off"></div>
+      </div>
+      <div class="field"><label>Presupuesto o tarifa (PDF o fotos, máximo 6)</label><input type="file" id="imp-files" accept="application/pdf,image/*" multiple></div>
+      <div class="modal-actions">
+        <button class="btn" id="imp-leer" onclick="leerProveedor()">🤖 Leer con la IA</button>
+        <button class="btn btn-sec" onclick="closeModal('modal-imp')">Cancelar</button>
+      </div>
+    </div>
+    <div id="imp-paso2" style="display:none">
+      <div class="info-box" id="imp-info"></div>
+      <div class="field"><label>¿Los precios del documento llevan IVA incluido?</label>
+        <select id="imp-iva" onchange="impIva()"><option value="0">No, son precios sin IVA</option><option value="10">Sí, con 10 % de IVA</option><option value="21">Sí, con 21 % de IVA</option></select>
+      </div>
+      <div id="imp-lista"></div>
+      <div class="modal-actions">
+        <button class="btn btn-green" id="imp-guardar" onclick="guardarImportados()">Guardar en el preciario</button>
+        <button class="btn btn-sec" onclick="impVolver()">← Volver</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL COPIAR -->
@@ -1383,12 +1427,12 @@ async function leerPdf(f,maxPag){
   return {total,paginas};
 }
 // Prepara lo que se envía a Gemini y avisa de lo que no cabe (nunca se descarta nada en silencio)
-async function prepararAdjuntos(progreso){
+async function prepararAdjuntos(progreso,archivos){
   const parts=[],avisos=[],res={fotos:0,paginas:0,pdfs:0,audios:0};
   let bytes=0;
   const cabe=n=>bytes+n<=MAX_BYTES_IA;
   const add=(p,n)=>{parts.push(p);bytes+=n};
-  const de=t=>uploadedPhotos.filter(f=>tipoAdjunto(f)===t);
+  const de=t=>(archivos||uploadedPhotos).filter(f=>tipoAdjunto(f)===t);
   for(const f of de('audio')){
     if(res.audios>=MAX_AUDIOS_IA){avisos.push('El audio "'+f.name+'" no se envió: la IA lee '+MAX_AUDIOS_IA+' como máximo');continue}
     const mime=mimeAudio(f);
@@ -1635,16 +1679,20 @@ function renderResults(data){
 
 function itemsPrecioActuales(){return generatedData&&generatedData._gen?preciosDeZona((getDB()||{}).preciario||[],generatedData._zona||''):null}
 // De dónde sale el precio de una partida: de tu preciario, estimado por la IA o puesto a mano
+function itemDePrecio(p,items){
+  const pr=Number(p.precio_unitario)||0,u=String(p.unidad||'').trim().toUpperCase();
+  return (items||[]).find(it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u)||null;
+}
 function origenPrecio(p,items){
   if(p._pm)return'man';
-  const pr=Number(p.precio_unitario)||0,u=String(p.unidad||'').trim().toUpperCase();
-  return (items||[]).some(it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u)?'pre':'ia';
+  return itemDePrecio(p,items)?'pre':'ia';
 }
 function flagsPartida(p,items){
   let h='';
   if(items){
     const o=origenPrecio(p,items);
-    h+=o==='pre'?'<span class="p-origen o-pre">📚 Precio de tu preciario</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
+    const it=o==='pre'?itemDePrecio(p,items):null;
+    h+=o==='pre'?'<span class="p-origen o-pre">📚 Precio de tu preciario'+(it&&it.fuente?' · '+esc(it.fuente)+(it.fecha?' ('+esc(fechaCorta(it.fecha))+')':''):'')+'</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
   }
   if(!(Number(p.cantidad)>0))h+='<span class="p-aviso o-conf">⚠️ Sin medición: confírmala</span>';
   return h;
@@ -2492,8 +2540,8 @@ function refreshZonas(){
 // Con Drive conectado, el preciario compartido (pestaña Preciario de la hoja) manda.
 // Aquí se guarda una copia para trabajar sin conexión.
 function precKey(p){const n=x=>String(x||'').trim().toLowerCase().replace(/\s+/g,' ');return n(p.desc)+'|'+n(p.unit)+'|'+n(p.zona)}
-function precToDrive(p){return{descripcion:p.desc,unidad:p.unit,precio:p.price,capitulo:p.cap,zona:p.zona||'',autor:currentUser?currentUser.username:''}}
-function precFromDrive(q){return{id:newId(),desc:String(q.descripcion||''),unit:String(q.unidad||''),price:Number(q.precio)||0,cap:String(q.capitulo||''),zona:String(q.zona||''),s:1}}
+function precToDrive(p){return{descripcion:p.desc,unidad:p.unit,precio:p.price,capitulo:p.cap,zona:p.zona||'',autor:currentUser?currentUser.username:'',fuente:p.fuente||'',fecha:p.fecha||''}}
+function precFromDrive(q){return{id:newId(),desc:String(q.descripcion||''),unit:String(q.unidad||''),price:Number(q.precio)||0,cap:String(q.capitulo||''),zona:String(q.zona||''),fuente:String(q.fuente||''),fecha:String(q.fecha||''),s:1}}
 let precMsg='';
 // Baja el preciario de Drive; lo que solo estaba en este dispositivo se sube antes para no perderlo
 async function syncPreciario(){
@@ -2596,9 +2644,140 @@ async function renderPreciario(soloFiltro){
   if(!filas.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">No hay precios en esta zona</div><div class="empty-sub">Guarda partidas desde un presupuesto con esa zona, o añádelas arriba</div></div>`;return}
   list.innerHTML=filas.map(({p,i})=>`
     <div class="prec-item">
-      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">📍 ${esc(p.zona)}</span>`:''}</div></div>
+      <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">📍 ${esc(p.zona)}</span>`:''}${p.fuente?`<span class="tag">🏷️ ${esc(p.fuente)}${p.fecha?' · '+esc(fechaCorta(p.fecha)):''}</span>`:''}</div></div>
       ${conDrive?'':`<button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>`}
     </div>`).join('');
+}
+// ══ IMPORTAR PRECIOS DE UN PRESUPUESTO DE PROVEEDOR ══
+let impEstado=null;
+// Número que puede venir como texto español ("1.234,50", "35,5") o inglés ("35.5")
+function numES(v){
+  if(typeof v==='number')return isFinite(v)?v:0;
+  let t=String(v==null?'':v).replace(/[^\d.,\-]/g,'');
+  if(t.includes(',')&&t.includes('.'))t=t.replace(/\./g,'').replace(',','.');
+  else if(t.includes(','))t=t.replace(',','.');
+  const n=parseFloat(t);return isFinite(n)?n:0;
+}
+function fechaCorta(f){const m=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[3]+'/'+m[2]+'/'+m[1]:String(f||'')}
+function hoyISO(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())}
+const UNIDADES_PREC=['M2','ML','UD','H','PA','KG','M3'];
+function capitulosPrec(){return Array.from(document.querySelectorAll('#prec-cap option')).map(o=>o.value||o.textContent)}
+function abrirImportar(){
+  impEstado=null;
+  document.getElementById('imp-prov').value='';
+  document.getElementById('imp-fecha').value=hoyISO();
+  let z='';try{z=localStorage.getItem('pia_zona')||''}catch(e){}
+  document.getElementById('imp-zona').value=z;
+  document.getElementById('imp-files').value='';
+  document.getElementById('imp-paso1').style.display='';document.getElementById('imp-paso2').style.display='none';
+  refreshZonas();
+  document.getElementById('modal-imp').classList.add('open');
+}
+function impVolver(){document.getElementById('imp-paso1').style.display='';document.getElementById('imp-paso2').style.display='none'}
+function parseImportados(t){
+  let s=String(t).replace(/```json|```/g,'').trim(),o;
+  try{o=JSON.parse(s)}catch{const i=s.indexOf('{'),j=s.lastIndexOf('}');try{o=JSON.parse(s.slice(i,j+1))}catch{o=null}}
+  if(!o||!Array.isArray(o.partidas))throw new Error('La IA no devolvió precios legibles. Inténtalo otra vez');
+  return o;
+}
+function promptImportar(){
+  const caps=capitulosPrec().join(', ');
+  return `Eres un asistente que extrae los precios de un presupuesto o tarifa de un proveedor de obra en España. Devuelve solo JSON válido, sin markdown:
+{"iva_incluido_pct":0,"partidas":[{"descripcion":"","unidad":"M2","precio_unitario":0,"capitulo":"VARIOS"}]}
+
+REGLAS (obligatorias):
+1. Copia SOLO precios que aparezcan en el documento. No inventes, no estimes y no completes ningún precio.
+2. El precio es por unidad (€/m², €/ud, €/ml, €/h…). Si el documento da una cantidad y un importe total, divide el total entre la cantidad. Si solo hay un importe total sin cantidad, usa unidad "PA" y ese importe.
+3. No incluyas totales, subtotales, IVA, descuentos, condiciones de pago ni líneas sin importe.
+4. La descripción debe permitir reconocer el trabajo o el material (en castellano; si el documento está en catalán, tradúcela). Conserva marca y modelo si constan.
+5. "unidad" debe ser una de: ${UNIDADES_PREC.join(', ')} (m² → M2, m → ML, ud/u/unidad → UD, h/hora → H, partida/global → PA).
+6. "capitulo" debe ser uno de: ${caps}.
+7. "iva_incluido_pct": 0 si los precios van sin IVA; 10 o 21 solo si el documento dice expresamente que los precios llevan IVA incluido. Si no queda claro, 0.
+8. Si el documento no contiene precios, devuelve "partidas":[].`;
+}
+async function leerProveedor(){
+  const prov=document.getElementById('imp-prov').value.trim();
+  const fecha=document.getElementById('imp-fecha').value||hoyISO();
+  const zona=zonaCanonica(document.getElementById('imp-zona').value);
+  const files=Array.from(document.getElementById('imp-files').files||[]).filter(f=>['pdf','foto'].includes(tipoAdjunto(f))).slice(0,6);
+  if(!prov){showToast('Escribe el nombre del proveedor',true);return}
+  if(!files.length){showToast('Elige un PDF o fotos del presupuesto',true);return}
+  if(!getAI().key&&driveConectado()){try{await pullAiShared()}catch(e){console.error(e.message)}}
+  if(!getAI().key){showToast('Falta la clave de Gemini: pégala en Ajustes',true);closeModal('modal-imp');showTab('ajustes');return}
+  const btn=document.getElementById('imp-leer');btn.disabled=true;
+  setOverlay('Leyendo el presupuesto…','Preparando los archivos');
+  try{
+    const adj=await prepararAdjuntos(t=>setOverlay('Leyendo el presupuesto…',t),files);
+    if(!adj.parts.length)throw new Error(adj.avisos[0]||'No se pudo leer ningún archivo');
+    setOverlay('Leyendo el presupuesto…','La IA está copiando los precios');
+    const parts=adj.parts.slice();
+    parts.push({text:`Proveedor: ${prov}\nFecha: ${fecha}\nExtrae las partidas con su precio unitario del documento adjunto.`});
+    const t=await callGemini(promptImportar(),parts,16000,e=>setOverlay('Leyendo el presupuesto…',e));
+    const o=parseImportados(t);
+    const caps=capitulosPrec(),vistos=new Set(),filas=[];
+    (o.partidas||[]).forEach(q=>{
+      const desc=String(q&&q.descripcion||'').replace(/\s+/g,' ').trim().slice(0,300);
+      const price=Math.round(numES(q&&q.precio_unitario)*100)/100;
+      if(desc.length<3||!(price>0)||price>=10000000)return;
+      let unit=String(q.unidad||'').trim().toUpperCase();if(!UNIDADES_PREC.includes(unit))unit='UD';
+      let cap=String(q.capitulo||'').trim().toUpperCase();if(!caps.includes(cap))cap=caps.includes('VARIOS')?'VARIOS':caps[caps.length-1]||'VARIOS';
+      const k=desc.toLowerCase()+'|'+unit;if(vistos.has(k))return;vistos.add(k);
+      filas.push({ok:true,desc,unit,price,cap});
+    });
+    hideOverlay();btn.disabled=false;
+    if(!filas.length){showToast('La IA no encontró precios en ese documento',true);return}
+    const ivaDoc=Number(o.iva_incluido_pct);
+    impEstado={prov,fecha,zona,filas:filas.slice(0,300),avisos:adj.avisos};
+    document.getElementById('imp-iva').value=ivaDoc===10||ivaDoc===21?String(ivaDoc):'0';
+    document.getElementById('imp-paso1').style.display='none';document.getElementById('imp-paso2').style.display='';
+    renderImportados();
+  }catch(e){hideOverlay();btn.disabled=false;showToast(e.message,true);console.error(e)}
+}
+function impIva(){renderImportados(true)}
+function renderImportados(soloResumen){
+  const st=impEstado;if(!st)return;
+  const iva=Number(document.getElementById('imp-iva').value)||0;
+  const caps=capitulosPrec();
+  const conIva=p=>Math.round(p/(1+iva/100)*100)/100;
+  const existentes=new Set(((getDB()||{}).preciario||[]).map(precKey));
+  const marcadas=st.filas.filter(f=>f.ok);
+  const yaExisten=marcadas.filter(f=>existentes.has(precKey({desc:f.desc,unit:f.unit,zona:st.zona}))).length;
+  document.getElementById('imp-info').innerHTML=
+    `🏷️ <strong>${esc(st.prov)}</strong> · ${esc(fechaCorta(st.fecha))}${st.zona?' · 📍 '+esc(st.zona):''}<br>La IA ha copiado <strong>${st.filas.length}</strong> precios. Revisa que coincidan con el documento: lo que desmarques no se guarda.`
+    +(iva?`<br>Se guardarán <strong>sin IVA</strong> (dividiendo entre 1,${String(iva).padStart(2,'0')}).`:'')
+    +(yaExisten?`<br>⚠️ ${yaExisten} ya existen en tu preciario con esa descripción y zona: se actualizarán con este precio.`:'')
+    +(st.avisos&&st.avisos.length?'<br>⚠️ '+st.avisos.map(esc).join('<br>⚠️ '):'');
+  document.getElementById('imp-guardar').textContent=`Guardar ${marcadas.length} en el preciario`;
+  document.getElementById('imp-guardar').disabled=!marcadas.length;
+  if(soloResumen===true&&document.getElementById('imp-lista').children.length)return;
+  document.getElementById('imp-lista').innerHTML=st.filas.map((f,i)=>`
+    <div class="imp-row${f.ok?'':' off'}" id="imp-r${i}">
+      <div class="imp-top"><input type="checkbox" ${f.ok?'checked':''} onchange="impCampo(${i},'ok',this.checked)">
+        <textarea rows="2" maxlength="300" oninput="impCampo(${i},'desc',this.value)">${esc(f.desc)}</textarea></div>
+      <div class="imp-grid">
+        <select onchange="impCampo(${i},'unit',this.value)">${UNIDADES_PREC.map(u=>`<option${u===f.unit?' selected':''}>${u}</option>`).join('')}</select>
+        <input type="number" step="0.01" min="0" value="${f.price}" oninput="impCampo(${i},'price',this.value)">
+        <select class="imp-cap" onchange="impCampo(${i},'cap',this.value)">${caps.map(c=>`<option${c===f.cap?' selected':''}>${esc(c)}</option>`).join('')}</select>
+      </div>
+    </div>`).join('');
+}
+function impCampo(i,campo,v){
+  const f=impEstado&&impEstado.filas[i];if(!f)return;
+  if(campo==='ok'){f.ok=!!v;const r=document.getElementById('imp-r'+i);if(r)r.classList.toggle('off',!f.ok)}
+  else if(campo==='price')f.price=Math.round((Number(v)||0)*100)/100;
+  else f[campo]=String(v).slice(0,300);
+  renderImportados(true);
+}
+async function guardarImportados(){
+  const st=impEstado;if(!st)return;
+  const iva=Number(document.getElementById('imp-iva').value)||0;
+  const items=st.filas.filter(f=>f.ok&&f.desc.trim().length>=3&&f.price>0).map(f=>({
+    desc:f.desc.trim(),unit:f.unit,price:Math.round(f.price/(1+iva/100)*100)/100,cap:f.cap,zona:st.zona,fuente:st.prov,fecha:st.fecha}));
+  if(!items.length){showToast('No hay precios marcados con descripción y precio',true);return}
+  const b=document.getElementById('imp-guardar');b.disabled=true;
+  const r=await savePrecItems(items.slice(0,500));
+  b.disabled=false;
+  if(r){closeModal('modal-imp');impEstado=null;renderPreciario()}
 }
 function delPreciario(i){
   if(driveConectado()){showToast('Con Drive conectado, borra la fila en la hoja Preciario de Drive',true);return}
