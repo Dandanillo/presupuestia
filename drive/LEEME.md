@@ -99,6 +99,12 @@ Con la versión 2.0 del script, las cuentas viven en Drive y se entra con **usua
 ## El logo del PDF
 El logo se guarda en la pestaña **Empresa** de la hoja y llega solo a todos los dispositivos. Al subirlo, la web lo reduce (máximo 600 × 240 px) hasta que quepa en una celda de Google Sheets; si tiene transparencia lo mantiene en PNG mientras pueda, y si no, lo pasa a JPG. Para quitarlo, pulsa quitar logo y guarda: desaparece de todos. Necesita el script en versión 2.2.
 
+## Importar precios de un proveedor (script 2.4)
+
+En la pestaña **Preciario** hay un botón "Importar presupuesto de proveedor". Subes el PDF o las fotos de un presupuesto real (fontanero, electricista, almacén…), escribes el nombre del proveedor y la fecha, y la IA **copia** los precios que aparecen (no inventa ninguno). Tú los revisas, marcas si llevan IVA incluido y se guardan en el preciario con la etiqueta del proveedor y la fecha.
+
+Para que el nombre del proveedor y la fecha se guarden también en Drive, hay que actualizar el script a la versión 2.4 (añade las columnas "Fuente" y "Fecha del precio"). Mira "Actualizar el script" más abajo: siempre **Nueva versión**, nunca "Nueva implementación".
+
 ## Actualizar el script
 Cuando salga una versión nueva de `drive/Code.gs` (esta añade compartir la clave de Gemini):
 1. En Apps Script, borra todo el código y pega el nuevo (**Copy raw file** en GitHub). Guarda con el disquete.
