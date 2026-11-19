@@ -565,6 +565,15 @@ audio{width:100%;margin-top:14px;border-radius:8px}
       <button class="btn btn-green" onclick="abrirImportar()">📥 Importar presupuesto de proveedor</button>
     </div>
     <div class="card">
+      <div class="card-title">📊 Base oficial de precios (archivo CSV)</div>
+      <div class="set-row-desc" style="margin-bottom:12px">Importa una base pública de precios de referencia (por ejemplo la de la Comunidad de Madrid 2024). Se guardan con su fuente y el coeficiente que pongas para actualizarlos. Son orientativos: tus precios propios y los de proveedores siempre mandan.</div>
+      <div class="field"><label>Archivo CSV (columnas: codigo;descripcion;unidad;precio_2024;precio_actualizado;capitulo)</label><input type="file" id="base-file" accept=".csv,text/csv"></div>
+      <div class="field"><label>Nombre de la fuente</label><input type="text" id="base-fuente" value="Base Comunidad de Madrid 2024"></div>
+      <div class="field"><label>Coeficiente de actualización (precio 2024 × este número)</label><input type="number" id="base-coef" value="1.09" step="0.01" min="0.5" max="3" inputmode="decimal"></div>
+      <button class="btn btn-green" onclick="importarBase()">📊 Importar base</button>
+      <div class="set-row-desc" id="base-info" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
       <div class="card-title">➕ Nueva partida</div>
       <div class="field"><label>Descripción</label><input type="text" id="prec-desc" placeholder="Ej: Impermeabilización con lámina LBM-40"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1475,12 +1484,38 @@ async function prepararAdjuntos(progreso,archivos){
 }
 
 // ══ PROMPT DE LA IA ══
-function contextoPreciario(zona){
+function esBase(p){return /^base\b/i.test(String((p&&p.fuente)||''))}
+function palabrasClave(t){
+  const sw=new Set(['para','con','sin','los','las','del','una','uno','por','que','como','mas','más','pero','todo','toda','hay','este','esta','estos','estas','también','tambien','sobre','entre','desde','hasta','obra','partida','instalación','suministro']);
+  return Array.from(new Set(String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!sw.has(w))));
+}
+// Las partidas de la base oficial son miles: a la IA solo se le pasan las más parecidas a la obra
+function baseRelevante(items,texto,max){
+  const kw=palabrasClave(texto).slice(0,40);if(!kw.length)return[];
+  max=max||60;
+  const norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const info=items.map(p=>{const d=norm(p.desc);return{p,d,sc:kw.reduce((n,w)=>n+(d.includes(w)?1:0),0)}}).filter(x=>x.sc>0);
+  // Se reparte entre las palabras de la obra para que no gane un solo tema (derribos, pintura…)
+  const listas=kw.map(w=>info.filter(x=>x.d.includes(w)).sort((a,b)=>b.sc-a.sc).slice(0,max)).filter(l=>l.length);
+  const out=[],vistos=new Set();
+  for(let i=0;out.length<max&&i<max;i++){
+    let alguno=false;
+    for(const l of listas){
+      if(i<l.length){alguno=true;if(!vistos.has(l[i].p)){vistos.add(l[i].p);out.push(l[i].p);if(out.length>=max)break}}
+    }
+    if(!alguno)break;
+  }
+  return out;
+}
+function contextoPreciario(zona,texto){
   DB=getDB();
-  const items=preciosDeZona(DB.preciario||[],zona).slice(-200);
+  const todos=preciosDeZona(DB.preciario||[],zona);
+  const items=todos.filter(p=>!esBase(p)).slice(-200);
+  const base=baseRelevante(todos.filter(esBase),texto,60);
   let ctx='';
   if(items.length>0){ctx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si una partida aparece con precio general y con precio de zona, usa el de la zona):\n';items.forEach(p=>{ctx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
-  return {items,ctx};
+  if(base.length>0){ctx+='\n\nBASE OFICIAL DE REFERENCIA (precios orientativos de una base pública, actualizados; son costes directos aproximados. Úsalos SOLO cuando una partida coincida claramente y no haya precio en el PRECIARIO PROPIO; si usas uno, copia su precio y su unidad exactos):\n';base.forEach(p=>{ctx+=`- ${String(p.desc).slice(0,160)} | ${p.unit} | ${p.price}€\n`})}
+  return {items:items.concat(base),ctx};
 }
 function promptSistema(o){
   const zona=o.zona||'',med=o.modo==='mediciones';
@@ -1528,7 +1563,7 @@ async function generateBudget(){
   let precCtx='';
   if(modo==='presupuesto'){
     if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
-    precCtx=contextoPreciario(zona).ctx;
+    precCtx=contextoPreciario(zona,[nombre,tipo,desc].join(' ')).ctx;
   }
 
   // Mediciones
@@ -1585,7 +1620,6 @@ async function valorarMediciones(){
   setOverlay('Poniendo precios…','La IA valora cada partida');
   try{
     if(driveConectado()){try{await syncPreciario()}catch(e){console.error(e.message)}}
-    const {ctx}=contextoPreciario(zona);
     const lista=[],refs=[];
     (generatedData.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{
       if(p._del)return;
@@ -1593,6 +1627,7 @@ async function valorarMediciones(){
       refs.push(p);
     })));
     if(!refs.length)throw new Error('No hay partidas a las que poner precio');
+    const {ctx}=contextoPreciario(zona,lista.map(x=>x.descripcion).join(' '));
     const sys=`Eres un experto en presupuestos de reformas y construcción en España (${zona||'Barcelona'}, 2026). Te paso las partidas de un estado de mediciones y debes poner un precio unitario a cada una. Devuelve solo JSON válido: {"precios":[{"id":0,"precio_unitario":0}]}.
 Precios en euros sin IVA, mano de obra y materiales, calidad media. Si la partida dice "sin suministro", es solo instalación o mano de obra. Usa el PRECIARIO PROPIO cuando una partida coincida (precio exacto y misma unidad). Si no está, estima un precio de mercado prudente: una persona lo revisará. No cambies cantidades ni añadas partidas.${ctx}`;
     const t=await callGemini(sys,[{text:JSON.stringify(lista)}],16000,e=>setOverlay('Poniendo precios…',e));
@@ -1681,7 +1716,8 @@ function itemsPrecioActuales(){return generatedData&&generatedData._gen?preciosD
 // De dónde sale el precio de una partida: de tu preciario, estimado por la IA o puesto a mano
 function itemDePrecio(p,items){
   const pr=Number(p.precio_unitario)||0,u=String(p.unidad||'').trim().toUpperCase();
-  return (items||[]).find(it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u)||null;
+  const ok=it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u;
+  return (items||[]).find(it=>!esBase(it)&&ok(it))||(items||[]).find(ok)||null;
 }
 function origenPrecio(p,items){
   if(p._pm)return'man';
@@ -1692,7 +1728,7 @@ function flagsPartida(p,items){
   if(items){
     const o=origenPrecio(p,items);
     const it=o==='pre'?itemDePrecio(p,items):null;
-    h+=o==='pre'?'<span class="p-origen o-pre">📚 Precio de tu preciario'+(it&&it.fuente?' · '+esc(it.fuente)+(it.fecha?' ('+esc(fechaCorta(it.fecha))+')':''):'')+'</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
+    h+=o==='pre'?'<span class="p-origen o-pre">'+(it&&esBase(it)?'📊 Referencia de base oficial (aproximada)':'📚 Precio de tu preciario')+(it&&it.fuente?' · '+esc(it.fuente)+(it.fecha?' ('+esc(fechaCorta(it.fecha))+')':''):'')+'</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
   }
   if(!(Number(p.cantidad)>0))h+='<span class="p-aviso o-conf">⚠️ Sin medición: confírmala</span>';
   return h;
@@ -2644,13 +2680,79 @@ async function renderPreciario(soloFiltro){
   refreshZonas();
   if(!DB.preciario||DB.preciario.length===0){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-text">Preciario vacío</div><div class="empty-sub">Añade tus partidas habituales o guarda las de un presupuesto revisado</div></div>`;return}
   const conDrive=driveConectado(),f=sel.value;
-  const filas=DB.preciario.map((p,i)=>({p,i})).filter(({p})=>f==='*'||(f===''?!p.zona:normZona(p.zona)===f));
+  const nBase=DB.preciario.filter(esBase).length;
+  const bi=document.getElementById('base-info');
+  if(bi)bi.textContent=nBase?`📊 Base oficial importada: ${nBase} partidas. No se listan aquí; la IA usa las parecidas a cada obra como referencia (tus precios propios siempre mandan).`:'';
+  const filas=DB.preciario.map((p,i)=>({p,i})).filter(({p})=>!esBase(p)&&(f==='*'||(f===''?!p.zona:normZona(p.zona)===f)));
   if(!filas.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">No hay precios en esta zona</div><div class="empty-sub">Guarda partidas desde un presupuesto con esa zona, o añádelas arriba</div></div>`;return}
   list.innerHTML=filas.map(({p,i})=>`
     <div class="prec-item">
       <div class="prec-info"><div class="prec-name">${esc(p.desc)}</div><div class="prec-meta">${(Number(p.price)||0).toFixed(2)} € / ${esc(p.unit)}<span class="tag">${esc(p.cap)}</span>${p.zona?`<span class="tag">📍 ${esc(p.zona)}</span>`:''}${p.fuente?`<span class="tag">🏷️ ${esc(p.fuente)}${p.fecha?' · '+esc(fechaCorta(p.fecha)):''}</span>`:''}</div></div>
       ${conDrive?'':`<button class="btn btn-sm btn-red" onclick="delPreciario(${i})">Borrar</button>`}
     </div>`).join('');
+}
+// ══ IMPORTAR UNA BASE OFICIAL (CSV) ══
+// Una línea de CSV con ";" como separador y comillas dobles opcionales
+function csvLinea(l){
+  const out=[];let cur='',q=false;
+  for(let i=0;i<l.length;i++){
+    const c=l[i];
+    if(q){if(c==='"'){if(l[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+    else if(c==='"')q=true;
+    else if(c===';'){out.push(cur);cur=''}
+    else cur+=c;
+  }
+  out.push(cur);return out;
+}
+function parseBaseCSV(texto,coef,fuente){
+  const caps=capitulosPrec(),vistos=new Set(),items=[];
+  const lineas=String(texto||'').replace(/^\uFEFF/,'').split(/\r?\n/);
+  const cab=csvLinea(lineas[0]||'').map(x=>x.trim().toLowerCase());
+  const ix=n=>cab.indexOf(n);
+  const iD=ix('descripcion'),iU=ix('unidad'),iP=ix('precio_2024'),iC=ix('capitulo');
+  if(iD<0||iU<0||iP<0)throw new Error('El archivo no tiene las columnas descripcion;unidad;precio_2024');
+  for(let i=1;i<lineas.length;i++){
+    if(!lineas[i].trim())continue;
+    const c=csvLinea(lineas[i]);
+    const desc=String(c[iD]||'').replace(/\s+/g,' ').trim().slice(0,300);
+    let unit=String(c[iU]||'').trim().toUpperCase();
+    const base=numES(c[iP]);
+    if(desc.length<3||!(base>0)||!UNIDADES_PREC.includes(unit))continue;
+    let cap=String(iC>=0?c[iC]:'').trim().toUpperCase();if(!caps.includes(cap))cap=caps.includes('VARIOS')?'VARIOS':caps[caps.length-1]||'VARIOS';
+    const price=Math.round(base*coef*100)/100;
+    const it={desc,unit,price,cap,zona:'',fuente,fecha:'2024-06-27'};
+    const k=precKey(it);if(vistos.has(k))continue;vistos.add(k);
+    items.push(it);
+  }
+  return items;
+}
+async function importarBase(){
+  const f=(document.getElementById('base-file').files||[])[0];
+  const coef=parseFloat(String(document.getElementById('base-coef').value).replace(',','.'));
+  let nombre=document.getElementById('base-fuente').value.trim()||'Base oficial';
+  if(!f){showToast('Elige el archivo CSV de la base',true);return}
+  if(!(coef>=0.5&&coef<=3)){showToast('El coeficiente debe estar entre 0,5 y 3',true);return}
+  if(!/^base\b/i.test(nombre))nombre='Base '+nombre;
+  const fuente=nombre.slice(0,70)+' ×'+String(Math.round(coef*100)/100).replace('.',',');
+  let items;
+  try{items=parseBaseCSV(await f.text(),coef,fuente)}catch(e){showToast(e.message,true);return}
+  if(!items.length){showToast('No encontré partidas válidas en el archivo',true);return}
+  if(!confirm(`Se van a guardar ${items.length} partidas de «${fuente}». Si ya las importaste antes, se actualizan sus precios. ¿Seguir?`))return;
+  setOverlay('Importando la base…','Preparando '+items.length+' partidas');
+  try{
+    if(driveConectado()){
+      for(let i=0;i<items.length;i+=500){
+        setOverlay('Importando la base…','Guardando en Drive: '+Math.min(i+500,items.length)+' de '+items.length);
+        await driveCall('preciario.guardar',{items:items.slice(i,i+500).map(precToDrive)});
+      }
+      setOverlay('Importando la base…','Sincronizando');
+      await syncPreciario();
+    }else addPrecLocal(items);
+    hideOverlay();
+    showToast(`Base importada: ${items.length} partidas ✓`);
+    document.getElementById('base-file').value='';
+    renderPreciario(true);
+  }catch(e){hideOverlay();showToast('No se pudo importar: '+e.message,true);console.error(e)}
 }
 // ══ IMPORTAR PRECIOS DE UN PRESUPUESTO DE PROVEEDOR ══
 let impEstado=null;
