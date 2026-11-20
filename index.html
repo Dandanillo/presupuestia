@@ -1490,17 +1490,20 @@ const normTxt=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\
 // Palabras de la obra ordenadas por las veces que se repiten (las más repetidas suelen ser los trabajos principales)
 function palabrasClave(t){
   const n={};
-  normTxt(t).split(/[^a-z0-9]+/).forEach(w=>{if(w.length>=4&&!/^\d+$/.test(w)&&!SW_BASE.has(w))n[w]=(n[w]||0)+1});
+  normTxt(t).split(/[^a-z0-9]+/).forEach(w=>{if(w.length>=4&&!/^\d+$/.test(w)&&!SW_BASE.has(w)){if(w.length>5)w=w.replace(/(es|s)$/,'');if(w.length>7)w=w.slice(0,6);n[w]=(n[w]||0)+1}});
   return Object.keys(n).sort((a,b)=>n[b]-n[a]).map(w=>({w,n:n[w]}));
 }
 // Las partidas de la base oficial son miles: a la IA solo se le pasan las más parecidas a la obra
 function baseRelevante(items,texto,max){
   max=max||60;
   const kw=palabrasClave(texto).slice(0,80);if(!kw.length||!items.length)return[];
-  const ds=items.map(p=>{const d=normTxt(p.desc);return{p,d,nt:Math.max(3,d.split(/[^a-z0-9]+/).filter(Boolean).length)}});
+  const ds=items.map(p=>{
+    if(!p._n){const d=normTxt(p.desc);Object.defineProperty(p,'_n',{value:{d,nt:Math.max(3,d.split(/[^a-z0-9]+/).filter(Boolean).length)},enumerable:false,configurable:true,writable:true})}
+    return{p,d:p._n.d,nt:p._n.nt};
+  });
   const N=ds.length;
   // peso de cada palabra: repetida en la obra y poco común en la base
-  const pesos=kw.map(k=>{const df=ds.reduce((n,x)=>n+(x.d.includes(k.w)?1:0),0);return{w:k.w,peso:df?Math.log(1+k.n)*Math.log(1+N/df):0}}).filter(k=>k.peso>0);
+  const pesos=kw.map((k,ix)=>{const df=ds.reduce((n,x)=>n+(x.d.includes(k.w)?1:0),0);return{w:k.w,peso:df?Math.log(1+k.n)*Math.log(1+N/df)*(1+1/(1+ix*0.5)):0}}).filter(k=>k.peso>0);
   // una partida puntúa por las palabras de la obra que contiene (suma de pesos, sin premiar descripciones muy largas)
   const pts=[];
   ds.forEach(x=>{
@@ -1600,6 +1603,12 @@ async function generateBudget(){
     limpiarGenerado(generatedData,modo);
     generatedData._obra=nombre;generatedData._tipo=tipo;generatedData._zona=zona;
     generatedData._modo=modo;generatedData._gen=true;
+    let avisoBase='';
+    if(modo==='presupuesto'){
+      setOverlay(titulo,'Comparando cada partida con la base oficial');
+      const ab=await ajustarConBase(generatedData,e=>setOverlay(titulo,e));
+      if(ab.error)avisoBase='No se pudo comparar con la base oficial ('+ab.error+'): los precios son los de la IA';
+    }
     generatedData._leido={fotos:adj.res.fotos,pdfs:adj.res.pdfs,paginas:adj.res.paginas,audios:adj.res.audios,avisos:adj.avisos.slice(0,10)};
     hideOverlay();
     // Ocultar pasos y mostrar resultados
@@ -1608,6 +1617,7 @@ async function generateBudget(){
     document.getElementById('results-section').style.display='block';
     renderResults(generatedData);
     if(adj.avisos.length)showToast(adj.avisos[0]+(adj.avisos.length>1?' (+'+(adj.avisos.length-1)+' avisos más abajo)':''),true);
+    else if(avisoBase)showToast(avisoBase,true);
   }catch(e){
     hideOverlay();
     let m=e.message||'Error';
@@ -1615,6 +1625,49 @@ async function generateBudget(){
     showToast(m,true);
     console.error(e);
   }
+}
+
+// ══ EMPAREJAR CADA PARTIDA CON LA BASE OFICIAL ══
+function normUd(u){
+  const x=String(u||'').trim().toUpperCase().replace('²','2').replace('³','3').replace(/\./g,'');
+  return {'M2':'M2','M3':'M3','ML':'ML','M':'ML','UD':'UD','U':'UD','H':'H','KG':'KG','PA':'PA'}[x]||x;
+}
+// Para cada partida sin precio de tu preciario, busca las 5 partidas más parecidas de la base
+// (con la misma unidad) y la IA confirma cuál es la misma obra. Si encaja, se copia su precio.
+async function ajustarConBase(data,onEstado){
+  const info={candidatas:0,emparejadas:0,error:''};
+  try{
+    const zona=data._zona||'';
+    const todos=preciosDeZona((getDB()||{}).preciario||[],zona);
+    const base=todos.filter(esBase),propios=todos.filter(x=>!esBase(x));
+    if(!base.length)return info;
+    const porUd={};base.forEach(b=>{const u=normUd(b.unit);(porUd[u]=porUd[u]||[]).push(b)});
+    const lista=[],refs=[];
+    (data.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(sc=>(sc.partidas||[]).forEach(p=>{
+      if(p._del)return;
+      const u=normUd(p.unidad);
+      if(!porUd[u]||u==='PA')return;                         // las globales no se emparejan
+      if(itemDePrecio({precio_unitario:p.precio_unitario,unidad:p.unidad},propios))return; // ya tiene precio tuyo
+      const cands=baseRelevante(porUd[u],String(p.descripcion||''),5);
+      if(!cands.length)return;
+      lista.push({i:refs.length,partida:String(p.descripcion||'').slice(0,300),unidad:u,candidatas:cands.map((x,k)=>({c:k,descripcion:String(x.desc).slice(0,200),precio:x.price}))});
+      refs.push({p,cands});
+    })));
+    info.candidatas=refs.length;
+    if(!refs.length)return info;
+    const sys=`Eres aparejador. Te paso partidas de un presupuesto de reforma y, para cada una, hasta 5 partidas candidatas de una base de precios oficial. Decide si alguna candidata es EXACTAMENTE el mismo trabajo (misma operación y mismas características principales, misma unidad). Si no estás seguro o es otro trabajo, no elijas ninguna. Devuelve solo JSON: {"elecciones":[{"i":0,"c":1}, {"i":1,"c":null}]} donde i es el número de partida y c el número de la candidata elegida o null. Incluye todas las partidas.`;
+    const t=await callGemini(sys,[{text:JSON.stringify(lista)}],8000,onEstado);
+    let o;const str=String(t).replace(/```json|```/g,'').trim();
+    try{o=JSON.parse(str)}catch{const a=str.indexOf('{'),b=str.lastIndexOf('}');try{o=JSON.parse(str.slice(a,b+1))}catch{o=null}}
+    if(!o||!Array.isArray(o.elecciones))throw new Error('respuesta no legible');
+    o.elecciones.forEach(e=>{
+      if(!e||typeof e!=='object'||e.c===null||e.c===undefined)return;
+      const r=refs[Number(e.i)];if(!r)return;
+      const cand=r.cands[Number(e.c)];if(!cand||!(Number(cand.price)>=0))return;
+      r.p.precio_unitario=Number(cand.price);delete r.p._pm;info.emparejadas++;
+    });
+  }catch(e){info.error=e.message||'error';console.error('ajustarConBase',e)}
+  return info;
 }
 
 // Segunda fase: poner precios a un estado de mediciones ya generado
@@ -1650,6 +1703,8 @@ Precios en euros sin IVA, mano de obra y materiales, calidad media. Si la partid
       if(Number.isInteger(k)&&refs[k]&&isFinite(pr)&&pr>=0){refs[k].precio_unitario=pr;delete refs[k]._pm;puestos++}
     });
     generatedData._modo='presupuesto';generatedData._gen=true;
+    setOverlay('Poniendo precios…','Comparando cada partida con la base oficial');
+    await ajustarConBase(generatedData,e=>setOverlay('Poniendo precios…',e));
     hideOverlay();
     renderResults(generatedData);
     showToast(puestos<refs.length?'Precios puestos a '+puestos+' de '+refs.length+' partidas: revisa las que quedan a 0':'Precios puestos ✓ Revísalos antes de enviar',puestos<refs.length);
@@ -1727,8 +1782,8 @@ function renderResults(data){
 function itemsPrecioActuales(){return generatedData&&generatedData._gen?preciosDeZona((getDB()||{}).preciario||[],generatedData._zona||''):null}
 // De dónde sale el precio de una partida: de tu preciario, estimado por la IA o puesto a mano
 function itemDePrecio(p,items){
-  const pr=Number(p.precio_unitario)||0,u=String(p.unidad||'').trim().toUpperCase();
-  const ok=it=>Math.abs((Number(it.price)||0)-pr)<0.005&&String(it.unit||'').trim().toUpperCase()===u;
+  const pr=Number(p.precio_unitario)||0,u=normUd(p.unidad);
+  const ok=it=>Math.abs((Number(it.price)||0)-pr)<0.005&&normUd(it.unit)===u;
   return (items||[]).find(it=>!esBase(it)&&ok(it))||(items||[]).find(ok)||null;
 }
 function origenPrecio(p,items){
