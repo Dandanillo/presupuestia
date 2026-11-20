@@ -1607,6 +1607,7 @@ async function generateBudget(){
     if(modo==='presupuesto'){
       setOverlay(titulo,'Comparando cada partida con la base oficial');
       const ab=await ajustarConBase(generatedData,e=>setOverlay(titulo,e));
+      generatedData._base=ab;
       if(ab.error)avisoBase='No se pudo comparar con la base oficial ('+ab.error+'): los precios son los de la IA';
     }
     generatedData._leido={fotos:adj.res.fotos,pdfs:adj.res.pdfs,paginas:adj.res.paginas,audios:adj.res.audios,avisos:adj.avisos.slice(0,10)};
@@ -1635,11 +1636,12 @@ function normUd(u){
 // Para cada partida sin precio de tu preciario, busca las 5 partidas más parecidas de la base
 // (con la misma unidad) y la IA confirma cuál es la misma obra. Si encaja, se copia su precio.
 async function ajustarConBase(data,onEstado){
-  const info={candidatas:0,emparejadas:0,error:''};
+  const info={disponibles:0,candidatas:0,emparejadas:0,error:''};
   try{
     const zona=data._zona||'';
     const todos=preciosDeZona((getDB()||{}).preciario||[],zona);
     const base=todos.filter(esBase),propios=todos.filter(x=>!esBase(x));
+    info.disponibles=base.length;
     if(!base.length)return info;
     const porUd={};base.forEach(b=>{const u=normUd(b.unit);(porUd[u]=porUd[u]||[]).push(b)});
     const lista=[],refs=[];
@@ -1704,7 +1706,7 @@ Precios en euros sin IVA, mano de obra y materiales, calidad media. Si la partid
     });
     generatedData._modo='presupuesto';generatedData._gen=true;
     setOverlay('Poniendo precios…','Comparando cada partida con la base oficial');
-    await ajustarConBase(generatedData,e=>setOverlay('Poniendo precios…',e));
+    generatedData._base=await ajustarConBase(generatedData,e=>setOverlay('Poniendo precios…',e));
     hideOverlay();
     renderResults(generatedData);
     showToast(puestos<refs.length?'Precios puestos a '+puestos+' de '+refs.length+' partidas: revisa las que quedan a 0':'Precios puestos ✓ Revísalos antes de enviar',puestos<refs.length);
@@ -1819,9 +1821,22 @@ function renderLeido(){
     (L.avisos||[]).forEach(a=>{h+='<div style="color:var(--red);margin-top:4px">⚠️ '+esc(a)+'</div>'});
   }
   if(g._modo!=='mediciones'){
-    const items=itemsPrecioActuales();let n={pre:0,ia:0,man:0};
-    (g.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{if(!p._del)n[origenPrecio(p,items)]++})));
-    h+='<div style="margin-top:6px">💶 <strong>Precios:</strong> '+n.pre+' de tu preciario, '+n.ia+' estimados por la IA'+(n.man?', '+n.man+' puestos por ti':'')+'. Los estimados no tienen una fuente fiable: contrástalos con tus proveedores.</div>';
+    const items=itemsPrecioActuales();let n={pre:0,ia:0,man:0,base:0};
+    (g.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(s=>(s.partidas||[]).forEach(p=>{
+      if(p._del)return;
+      const o=origenPrecio(p,items);
+      if(o==='pre'){const it=itemDePrecio(p,items);if(it&&esBase(it)){n.base++;return}}
+      n[o]++;
+    })));
+    h+='<div style="margin-top:6px">💶 <strong>Precios:</strong> '+n.pre+' de tu preciario, '+n.base+' de la base oficial, '+n.ia+' estimados por la IA'+(n.man?', '+n.man+' puestos por ti':'')+'. Los estimados no tienen una fuente fiable: contrástalos con tus proveedores.</div>';
+    const B=g._base;
+    if(B){
+      let t;
+      if(B.error)t='No se pudo comparar con la base ('+B.error+')';
+      else if(!B.disponibles)t='No hay base oficial en tu preciario: impórtala en Preciario';
+      else t='Comparadas con la base: '+B.candidatas+' partidas; la IA ha confirmado '+B.emparejadas+' (disponibles: '+B.disponibles+')';
+      h+='<div style="margin-top:4px;font-size:12px;color:var(--text3,#8a8f98)">📊 '+esc(t)+'</div>';
+    }
   }
   el.innerHTML=h?'<div class="info-box">'+h+'</div>':'';
 }
