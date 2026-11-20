@@ -1485,33 +1485,40 @@ async function prepararAdjuntos(progreso,archivos){
 
 // ══ PROMPT DE LA IA ══
 function esBase(p){return /^base\b/i.test(String((p&&p.fuente)||''))}
+const SW_BASE=new Set(['para','con','sin','los','las','del','una','uno','por','que','como','mas','pero','todo','toda','hay','este','esta','estos','estas','tambien','sobre','entre','desde','hasta','obra','partida','instalacion','suministro','segun','medios','incluye','incluido','incluida','nuevo','nueva','existente','existentes','tipo','color','blanco','mano','manuales','cada','donde','cuando','incluso','trabajos','unidad','precio','importe','total','pagina','cantidad','descripcion','proyecto','zona']);
+const normTxt=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+// Palabras de la obra ordenadas por las veces que se repiten (las más repetidas suelen ser los trabajos principales)
 function palabrasClave(t){
-  const sw=new Set(['para','con','sin','los','las','del','una','uno','por','que','como','mas','más','pero','todo','toda','hay','este','esta','estos','estas','también','tambien','sobre','entre','desde','hasta','obra','partida','instalación','suministro']);
-  return Array.from(new Set(String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/).filter(w=>w.length>=4&&!sw.has(w))));
+  const n={};
+  normTxt(t).split(/[^a-z0-9]+/).forEach(w=>{if(w.length>=4&&!/^\d+$/.test(w)&&!SW_BASE.has(w))n[w]=(n[w]||0)+1});
+  return Object.keys(n).sort((a,b)=>n[b]-n[a]).map(w=>({w,n:n[w]}));
 }
 // Las partidas de la base oficial son miles: a la IA solo se le pasan las más parecidas a la obra
 function baseRelevante(items,texto,max){
-  const kw=palabrasClave(texto).slice(0,40);if(!kw.length)return[];
   max=max||60;
-  const norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const info=items.map(p=>{const d=norm(p.desc);return{p,d,sc:kw.reduce((n,w)=>n+(d.includes(w)?1:0),0)}}).filter(x=>x.sc>0);
-  // Se reparte entre las palabras de la obra para que no gane un solo tema (derribos, pintura…)
-  const listas=kw.map(w=>info.filter(x=>x.d.includes(w)).sort((a,b)=>b.sc-a.sc).slice(0,max)).filter(l=>l.length);
-  const out=[],vistos=new Set();
-  for(let i=0;out.length<max&&i<max;i++){
-    let alguno=false;
-    for(const l of listas){
-      if(i<l.length){alguno=true;if(!vistos.has(l[i].p)){vistos.add(l[i].p);out.push(l[i].p);if(out.length>=max)break}}
-    }
-    if(!alguno)break;
-  }
+  const kw=palabrasClave(texto).slice(0,80);if(!kw.length||!items.length)return[];
+  const ds=items.map(p=>{const d=normTxt(p.desc);return{p,d,nt:Math.max(3,d.split(/[^a-z0-9]+/).filter(Boolean).length)}});
+  const N=ds.length;
+  // peso de cada palabra: repetida en la obra y poco común en la base
+  const pesos=kw.map(k=>{const df=ds.reduce((n,x)=>n+(x.d.includes(k.w)?1:0),0);return{w:k.w,peso:df?Math.log(1+k.n)*Math.log(1+N/df):0}}).filter(k=>k.peso>0);
+  // una partida puntúa por las palabras de la obra que contiene (suma de pesos, sin premiar descripciones muy largas)
+  const pts=[];
+  ds.forEach(x=>{
+    let sc=0,mejor=null,mp=0;
+    pesos.forEach(k=>{if(x.d.includes(k.w)){sc+=k.peso;if(k.peso>mp){mp=k.peso;mejor=k.w}}});
+    if(sc>0)pts.push({p:x.p,sc:sc/Math.sqrt(x.nt),k:mejor});
+  });
+  pts.sort((a,b)=>b.sc-a.sc);
+  // tope por palabra principal para que un solo tema no se coma toda la lista
+  const tope=Math.max(6,Math.ceil(max/10)),cuenta={},out=[];
+  for(const x of pts){if(out.length>=max)break;if((cuenta[x.k]||0)>=tope)continue;cuenta[x.k]=(cuenta[x.k]||0)+1;out.push(x.p)}
   return out;
 }
 function contextoPreciario(zona,texto){
   DB=getDB();
   const todos=preciosDeZona(DB.preciario||[],zona);
   const items=todos.filter(p=>!esBase(p)).slice(-200);
-  const base=baseRelevante(todos.filter(esBase),texto,60);
+  const base=baseRelevante(todos.filter(esBase),texto,String(texto||'').length>3000?150:60);
   let ctx='';
   if(items.length>0){ctx='\n\nPRECIARIO PROPIO (usa estos precios cuando coincidan; si una partida aparece con precio general y con precio de zona, usa el de la zona):\n';items.forEach(p=>{ctx+=`- ${String(p.desc).slice(0,200)} | ${p.unit} | ${p.price}€ | ${p.cap}${p.zona?' | zona: '+p.zona:''}\n`})}
   if(base.length>0){ctx+='\n\nBASE OFICIAL DE REFERENCIA (precios orientativos de una base pública, actualizados; son costes directos aproximados. Úsalos SOLO cuando una partida coincida claramente y no haya precio en el PRECIARIO PROPIO; si usas uno, copia su precio y su unidad exactos):\n';base.forEach(p=>{ctx+=`- ${String(p.desc).slice(0,160)} | ${p.unit} | ${p.price}€\n`})}
@@ -1574,12 +1581,17 @@ async function generateBudget(){
   const titulo=modo==='mediciones'?'Generando el estado de mediciones…':'Generando presupuesto…';
   setOverlay(titulo,'Leyendo lo que has subido');
 
-  const sys=promptSistema({zona,modo,precCtx,medCtx});
+  let sys=promptSistema({zona,modo,precCtx,medCtx});
   const upr=`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc||'(ver archivos adjuntos)'}\n${modo==='mediciones'?'Genera el estado de mediciones (sin precios)':'Genera el presupuesto completo'} en JSON.`;
 
   let adj=null;
   try{
     adj=await prepararAdjuntos(t=>setOverlay(titulo,t));
+    if(modo==='presupuesto'){
+      // La base oficial se busca también con el texto de los PDF, no solo con lo que escribes
+      const textoDocs=adj.parts.filter(x=>x.text).map(x=>x.text).join(' ').slice(0,80000);
+      if(textoDocs){precCtx=contextoPreciario(zona,[nombre,tipo,desc,textoDocs].join(' ')).ctx;sys=promptSistema({zona,modo,precCtx,medCtx})}
+    }
     setOverlay(titulo,'La IA está analizando la obra');
     const parts=adj.parts.slice();
     parts.push({text:upr});
