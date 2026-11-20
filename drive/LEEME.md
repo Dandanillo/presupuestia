@@ -105,6 +105,16 @@ En la pestaña **Preciario** hay un botón "Importar presupuesto de proveedor". 
 
 Para que el nombre del proveedor y la fecha se guarden también en Drive, hay que actualizar el script a la versión 2.4 (añade las columnas "Fuente" y "Fecha del precio"). Mira "Actualizar el script" más abajo: siempre **Nueva versión**, nunca "Nueva implementación".
 
+## Base oficial de precios (archivo CSV)
+
+En la pestaña **Preciario** hay una tarjeta "Base oficial de precios". Sirve para importar un CSV (columnas `codigo;descripcion;unidad;precio_2024;precio_actualizado;capitulo`) con precios públicos de referencia, por ejemplo la base de la Comunidad de Madrid 2024.
+
+- Cada precio se guarda como `precio_2024 × coeficiente`, con la fuente escrita (por ejemplo "Base Comunidad de Madrid 2024 ×1,09"). Para cambiar el coeficiente, vuelve a importar el mismo archivo: se actualizan los precios.
+- Esas partidas **no se listan** en el Preciario (son miles). La IA solo recibe las más parecidas a cada obra, y tus precios propios y los de proveedores tienen siempre prioridad.
+- En el presupuesto salen con la etiqueta "📊 Referencia de base oficial (aproximada)".
+- No hace falta cambiar el script de Drive. Se guardan de 500 en 500, así que la importación tarda un poco.
+- **No subas estos archivos al repositorio** (es público): déjalos en tu ordenador o en tu Drive.
+
 ## Actualizar el script
 Cuando salga una versión nueva de `drive/Code.gs` (esta añade compartir la clave de Gemini):
 1. En Apps Script, borra todo el código y pega el nuevo (**Copy raw file** en GitHub). Guarda con el disquete.
