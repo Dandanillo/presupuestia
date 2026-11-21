@@ -1657,7 +1657,7 @@ async function ajustarConBase(data,onEstado){
     })));
     info.candidatas=refs.length;
     if(!refs.length)return info;
-    const sys=`Eres aparejador. Te paso partidas de un presupuesto de reforma y, para cada una, hasta 5 partidas candidatas de una base de precios oficial. Decide si alguna candidata es EXACTAMENTE el mismo trabajo (misma operación y mismas características principales, misma unidad). Si no estás seguro o es otro trabajo, no elijas ninguna. Devuelve solo JSON: {"elecciones":[{"i":0,"c":1}, {"i":1,"c":null}]} donde i es el número de partida y c el número de la candidata elegida o null. Incluye todas las partidas.`;
+    const sys=`Eres aparejador. Te paso partidas de un presupuesto de reforma y, para cada una, hasta 5 partidas candidatas de una base de precios oficial. Elige la candidata que sea el mismo tipo de trabajo, aunque cambien detalles menores (dimensiones, marca, acabado o calidad exacta). No elijas si la candidata es otro trabajo distinto (por ejemplo, demolición frente a construcción, o un material distinto) ni si la unidad no tiene sentido. Indica "nivel": "exacta" si coincide en todo lo importante o "parecida" si es el mismo trabajo con diferencias menores. Si ninguna sirve, c es null. Devuelve solo JSON: {"elecciones":[{"i":0,"c":1,"nivel":"parecida"},{"i":1,"c":null}]} donde i es el número de partida y c el número de la candidata. Incluye todas las partidas.`;
     const t=await callGemini(sys,[{text:JSON.stringify(lista)}],8000,onEstado);
     let o;const str=String(t).replace(/```json|```/g,'').trim();
     try{o=JSON.parse(str)}catch{const a=str.indexOf('{'),b=str.lastIndexOf('}');try{o=JSON.parse(str.slice(a,b+1))}catch{o=null}}
