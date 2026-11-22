@@ -1595,14 +1595,26 @@ async function generateBudget(){
       const textoDocs=adj.parts.filter(x=>x.text).map(x=>x.text).join(' ').slice(0,80000);
       if(textoDocs){precCtx=contextoPreciario(zona,[nombre,tipo,desc,textoDocs].join(' ')).ctx;sys=promptSistema({zona,modo,precCtx,medCtx})}
     }
-    setOverlay(titulo,'La IA está analizando la obra');
+    let inv=null,invError='';
+    if(AGENTES_REVISION){
+      setOverlay(titulo,'Paso 1 de 3: la IA hace el inventario de trabajos');
+      try{inv=await agenteInventario(adj.parts,`Obra: ${nombre||'Sin nombre'}\nTipo: ${tipo||'No especificado'}\nDescripción: ${desc||'(ver archivos adjuntos)'}`,e=>setOverlay(titulo,e));if(!inv.n)inv=null}
+      catch(e){invError=e.message||'error';console.error('inventario',e)}
+    }
+    setOverlay(titulo,AGENTES_REVISION?'Paso 2 de 3: la IA redacta el presupuesto':'La IA está analizando la obra');
     const parts=adj.parts.slice();
-    parts.push({text:upr});
+    parts.push({text:upr+(inv?'\n\nINVENTARIO DE TRABAJOS QUE CONSTAN EN LOS DOCUMENTOS (cada uno debe quedar cubierto por alguna partida; puedes agrupar trabajos iguales, pero no omitas ninguno):\n'+inv.texto:'')});
     const t=await callGemini(sys,parts,undefined,e=>setOverlay(titulo,e));
     generatedData=parseBudgetJSON(t);
+    let infoRev={inventario:inv?inv.n:0,anadidas:0,error:AGENTES_REVISION&&!inv?(invError||'inventario vacío'):''};
+    if(inv){
+      setOverlay(titulo,'Paso 3 de 3: un revisor comprueba que no falte nada');
+      try{const rv=await agenteRevisor(generatedData,inv.texto,e=>setOverlay(titulo,e));infoRev.anadidas=aplicarRevision(generatedData,rv)}
+      catch(e){infoRev.error='revisión: '+(e.message||'error');console.error('revisor',e)}
+    }
     limpiarGenerado(generatedData,modo);
     generatedData._obra=nombre;generatedData._tipo=tipo;generatedData._zona=zona;
-    generatedData._modo=modo;generatedData._gen=true;
+    generatedData._modo=modo;generatedData._gen=true;generatedData._rev=infoRev;
     let avisoBase='';
     if(modo==='presupuesto'){
       setOverlay(titulo,'Comparando cada partida con la base oficial');
@@ -1626,6 +1638,71 @@ async function generateBudget(){
     showToast(m,true);
     console.error(e);
   }
+}
+
+// ══ AGENTES: INVENTARIO Y REVISOR ══
+let AGENTES_REVISION=true;   // la IA primero lista los trabajos de los documentos y al final revisa que no falte ninguno
+function jsonSuave(t){
+  const str=String(t||'').replace(/```json|```/g,'').trim();
+  try{return JSON.parse(str)}catch{}
+  const i=str.indexOf('{'),j=str.lastIndexOf('}');
+  if(i>=0&&j>i){try{return JSON.parse(str.slice(i,j+1))}catch{}}
+  return null;
+}
+// Agente 1: mide y lista lo que consta en los documentos, sin precios
+async function agenteInventario(parts,contexto,onEstado){
+  const sys=`Eres un aparejador que mide proyectos de reforma. Lee TODOS los documentos (planos, memorias, mediciones, notas, audios y fotos) y haz el inventario completo de los trabajos que constan en ellos, estancia por estancia. Incluye todo lo que aparezca: derribos y desmontajes, albañilería y tabiquería, falsos techos, revestimientos y alicatados, pavimentos, carpintería (cada puerta, ventana, armario o mueble con su referencia), cerrajería y vidrios, fontanería, gas, electricidad (puntos, mecanismos, cuadro, iluminación), climatización y ventilación, sanitarios y mobiliario, pintura, y también residuos, protecciones y limpieza si constan. REGLAS: lista solo lo que consta en los documentos, sin inventar nada ni añadir lo que sería habitual pero no aparece; no pongas precios; si hay una medida o cantidad, cópiala tal cual; si no hay, pon null. Si una nota dice "sin suministro" o "sense suministre", anótalo en el trabajo. Devuelve solo JSON: {"estancias":[{"nombre":"Cocina","trabajos":[{"trabajo":"","medida":""}]}]}`;
+  const t=await callGemini(sys,parts.concat([{text:contexto}]),16000,onEstado);
+  const o=jsonSuave(t);
+  if(!o||!Array.isArray(o.estancias))throw new Error('inventario no legible');
+  let n=0;const lineas=[];
+  o.estancias.forEach(e=>{
+    const nom=String((e&&e.nombre)||'General').trim().slice(0,60);
+    (Array.isArray(e&&e.trabajos)?e.trabajos:[]).forEach(w=>{
+      const tr=String((w&&w.trabajo)||'').trim().slice(0,260);if(!tr)return;
+      const m=(w&&w.medida!==null&&w.medida!==undefined&&String(w.medida).trim())?' ['+String(w.medida).trim().slice(0,60)+']':'';
+      lineas.push('- '+nom+': '+tr+m);n++;
+    });
+  });
+  return {texto:lineas.join('\n').slice(0,14000),n};
+}
+// Agente 2: compara el inventario con el presupuesto y dice qué trabajos no tienen partida
+async function agenteRevisor(g,invTxt,onEstado){
+  const pl=[];
+  (g.capitulos||[]).forEach(c=>(c.subcapitulos||[]).forEach(sc=>(sc.partidas||[]).forEach(p=>{
+    pl.push(`${p.codigo||''} | ${String(p.descripcion||'').slice(0,200)} | ${p.cantidad} ${p.unidad}`);
+  })));
+  const caps=(g.capitulos||[]).map(c=>c.nombre).join(' / ');
+  const sys=`Eres un revisor de presupuestos de reforma. Te paso el INVENTARIO de trabajos que constan en los documentos de la obra y las PARTIDAS del presupuesto. Para cada trabajo del inventario, comprueba si alguna partida lo cubre (aunque esté agrupado con otros). Devuelve SOLO los trabajos del inventario que NO están cubiertos por ninguna partida, como partidas nuevas en estilo técnico (descripción completa, qué no incluye, unidad M2, ML, UD, M3, KG, H o PA, cantidad copiada del inventario o 0 si no consta, y un precio unitario estimado de mercado en euros sin IVA). No inventes trabajos que no estén en el inventario. Si algo del inventario es dudoso o contradictorio, ponlo como pregunta en "pendientes" en vez de como partida. Devuelve solo JSON: {"faltan":[{"capitulo":"nombre de capítulo existente o nuevo","descripcion":"","no_incluye":"","cantidad":0,"unidad":"M2","precio_unitario":0}],"pendientes":[""]}`;
+  const txt=`CAPÍTULOS DEL PRESUPUESTO: ${caps}\n\nINVENTARIO:\n${invTxt}\n\nPARTIDAS DEL PRESUPUESTO (código | descripción | cantidad y unidad):\n${pl.join('\n').slice(0,60000)}`;
+  const t=await callGemini(sys,[{text:txt}],12000,onEstado);
+  const o=jsonSuave(t);
+  if(!o)throw new Error('revisión no legible');
+  return o;
+}
+function aplicarRevision(g,res){
+  let n=0;g.capitulos=g.capitulos||[];
+  (Array.isArray(res.faltan)?res.faltan:[]).slice(0,40).forEach(f=>{
+    if(!f||typeof f!=='object')return;
+    const desc=String(f.descripcion||'').replace(/\s+/g,' ').trim().slice(0,400);if(desc.length<8)return;
+    const nd=normTxt(desc);
+    let dup=false;g.capitulos.forEach(c=>(c.subcapitulos||[]).forEach(sc=>(sc.partidas||[]).forEach(p=>{if(normTxt(p.descripcion)===nd)dup=true})));
+    if(dup)return;
+    const unidad=normUd(f.unidad)||'UD';
+    const cant=Number(String(f.cantidad).replace(',','.'));
+    const nomCap=String(f.capitulo||'').trim().slice(0,80)||'OTROS TRABAJOS';
+    let cap=g.capitulos.find(c=>normTxt(c.nombre)===normTxt(nomCap));
+    if(!cap){cap={nombre:nomCap.toUpperCase(),subcapitulos:[]};g.capitulos.push(cap)}
+    cap.subcapitulos=cap.subcapitulos||[];
+    let sub=cap.subcapitulos[cap.subcapitulos.length-1];
+    if(!sub){sub={nombre:'Trabajos añadidos en la revisión',partidas:[]};cap.subcapitulos.push(sub)}
+    sub.partidas=sub.partidas||[];
+    const ci=g.capitulos.indexOf(cap)+1,si=cap.subcapitulos.indexOf(sub)+1;
+    sub.partidas.push({codigo:ci+'.'+si+'.'+(sub.partidas.length+1),descripcion:desc,no_incluye:String(f.no_incluye||'').slice(0,300),cantidad:(isFinite(cant)&&cant>0)?cant:0,unidad,precio_unitario:Math.max(0,Number(f.precio_unitario)||0),_rev:true});
+    n++;
+  });
+  g.pendientes=(Array.isArray(g.pendientes)?g.pendientes:[]).concat((Array.isArray(res.pendientes)?res.pendientes:[]).map(x=>String(x||'').trim().slice(0,300)).filter(Boolean)).slice(0,40);
+  return n;
 }
 
 // ══ EMPAREJAR CADA PARTIDA CON LA BASE OFICIAL ══
@@ -1799,6 +1876,7 @@ function flagsPartida(p,items){
     const it=o==='pre'?itemDePrecio(p,items):null;
     h+=o==='pre'?'<span class="p-origen o-pre">'+(it&&esBase(it)?'📊 Referencia de base oficial (aproximada)':'📚 Precio de tu preciario')+(it&&it.fuente?' · '+esc(it.fuente)+(it.fecha?' ('+esc(fechaCorta(it.fecha))+')':''):'')+'</span>':o==='man'?'<span class="p-origen o-man">✏️ Precio puesto por ti</span>':'<span class="p-origen o-ia">🤖 Precio estimado por la IA: revísalo</span>';
   }
+  if(p._rev)h+='<span class="p-aviso o-conf">🔎 Añadida por el revisor: comprueba cantidad y precio</span>';
   if(!(Number(p.cantidad)>0))h+='<span class="p-aviso o-conf">⚠️ Sin medición: confírmala</span>';
   return h;
 }
@@ -1829,6 +1907,11 @@ function renderLeido(){
       n[o]++;
     })));
     h+='<div style="margin-top:6px">💶 <strong>Precios:</strong> '+n.pre+' de tu preciario, '+n.base+' de la base oficial, '+n.ia+' estimados por la IA'+(n.man?', '+n.man+' puestos por ti':'')+'. Los estimados no tienen una fuente fiable: contrástalos con tus proveedores.</div>';
+    const R=g._rev;
+    if(R){
+      const t=R.error?'No se pudo completar la revisión ('+R.error+')':'Inventario: '+R.inventario+' trabajos detectados en los documentos; el revisor ha añadido '+R.anadidas+' partida'+(R.anadidas!==1?'s':'')+' que faltaban';
+      h+='<div style="margin-top:4px;font-size:12px;color:var(--text3,#8a8f98)">🧾 '+esc(t)+'</div>';
+    }
     const B=g._base;
     if(B){
       let t;
