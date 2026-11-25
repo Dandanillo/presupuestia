@@ -1799,7 +1799,7 @@ function renderResults(data){
   const container=document.getElementById('chapters-container');container.innerHTML='';
   const med=data._modo==='mediciones';
   const items=data._gen?preciosDeZona((getDB()||{}).preciario||[],data._zona||''):null;
-  let total=0;
+  let total=0,aparte=0;
   (data.capitulos||[]).forEach((cap,ci)=>{
     let ct=0;
     const cd=document.createElement('div');cd.className='chapter-block';
@@ -1837,11 +1837,11 @@ function renderResults(data){
       });
       sh+=`<div class="sub-block"><div class="sub-title">📁 ${esc(sub.nombre)}</div>${sx}</div>`;
     });
-    total+=ct;
-    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${esc(cap.nombre)}</div><div class="chapter-total" id="ct-${ci}">${fmtEUR(ct)}</div></div>${sh}`;
+    if(capAparte(cap))aparte+=ct;else total+=ct;
+    cd.innerHTML=`<div class="chapter-hdr"><div class="chapter-name">📂 ${esc(cap.nombre)}${capAparte(cap)?' <span style="font-weight:400;font-size:12px">(no suma en el total)</span>':''}</div><div class="chapter-total" id="ct-${ci}">${fmtEUR(ct)}</div></div>${sh}`;
     container.appendChild(cd);
   });
-  generatedData._baseTotal=total;
+  generatedData._baseTotal=total;generatedData._aparteTotal=aparte;
   if(data.notas){const n=document.createElement('div');n.className='info-box';n.innerHTML=`<strong>⚠️ Notas:</strong> ${esc(data.notas)}`;container.appendChild(n)}
   const rs=document.getElementById('results-section');
   rs.classList.toggle('modo-med',med);
@@ -1951,10 +1951,19 @@ function recalcRow(id){
   if(el)el.textContent=fmtEUR(qty*price);
   recalcAll();
 }
+// Capítulos que el documento pide cotizar aparte (equipamiento): se enseñan pero no suman en la base imponible
+function capAparte(cap){return /cotizar\s+aparte|fuera\s+del?\s+presupuesto/i.test((cap&&cap.nombre)||'')}
+// Partidas sin cantidad (0): el total no está completo hasta que se midan
+function contarSinMedir(){
+  let n=0;
+  ((generatedData&&generatedData.capitulos)||[]).forEach(cap=>{if(capAparte(cap))return;
+    (cap.subcapitulos||[]).forEach(sub=>(sub.partidas||[]).forEach(p=>{if(!p._del&&!(Number(p.cantidad)>0))n++}))});
+  return n;
+}
 // Todos los totales se calculan desde los datos, nunca leyendo el texto de la pantalla
 function recalcAll(){
   if(!generatedData)return;
-  let total=0;
+  let total=0,aparte=0;
   (generatedData.capitulos||[]).forEach((cap,ci)=>{
     let ct=0;
     (cap.subcapitulos||[]).forEach(sub=>{
@@ -1962,11 +1971,11 @@ function recalcAll(){
         if(!p._del)ct+=(Number(p.cantidad)||0)*(Number(p.precio_unitario)||0);
       });
     });
-    total+=ct;
+    if(capAparte(cap))aparte+=ct;else total+=ct;
     const el=document.getElementById('ct-'+ci);
     if(el)el.textContent=fmtEUR(ct);
   });
-  generatedData._baseTotal=total;
+  generatedData._baseTotal=total;generatedData._aparteTotal=aparte;
   updateSummary();
 }
 // IVA del presupuesto: 21, 10 o 0. Lo que no sea uno de esos valores se trata como 21
@@ -1984,12 +1993,15 @@ function updateSummary(){
   const sel=document.getElementById('iva-pct');if(sel&&sel.value!==String(ip))sel.value=String(ip);
   const iva=(base+margin)*(ip/100);
   const total=base+margin+iva;
-  document.getElementById('summary-rows').innerHTML=`
+  const sinMedir=contarSinMedir(),aparteT=generatedData?._aparteTotal||0;
+  const avisoMed=sinMedir>0?`<div class="info-box" style="border-color:#d9534f;margin-bottom:8px"><strong>⚠️ Faltan medidas en ${sinMedir} partida${sinMedir>1?'s':''}.</strong> Están a 0 €, así que este total es incompleto y no vale como presupuesto cerrado. Rellena las cantidades o pide las mediciones.</div>`:'';
+  const filaAparte=aparteT>0?`<div class="s-row"><span class="s-label">Equipamiento aparte (no incluido)</span><span class="s-value" style="color:var(--muted)">${aparteT.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`:'';
+  document.getElementById('summary-rows').innerHTML=avisoMed+`
     <div class="s-row"><span class="s-label">Base imponible</span><span class="s-value">${base.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>
     ${mp>0?`<div class="s-row"><span class="s-label">Margen ${mp}%</span><span class="s-value" style="color:var(--green)">+${margin.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`:''}
     <div class="s-row"><span class="s-label">IVA ${ip}%</span><span class="s-value">${iva.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>
     <div class="s-divider"></div>
-    <div class="s-row"><span class="s-label" style="font-weight:700;color:var(--text)">Total con IVA</span><span class="s-value total">${total.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>`;
+    <div class="s-row"><span class="s-label" style="font-weight:700;color:var(--text)">Total con IVA</span><span class="s-value total">${total.toLocaleString('es-ES',{minimumFractionDigits:2})} €</span></div>${filaAparte}`;
 }
 function delRow(id){
   const p=partidaRef(id);if(p)p._del=true;
@@ -2427,7 +2439,7 @@ async function buildBudgetPDF(opt){
   y+=boxH+7;
 
   // ── Tabla de partidas por capítulos (con el margen ya incluido en el precio) ──
-  const body=[];let base=0;
+  const body=[];let base=0,aparteP=0;
   (generatedData.capitulos||[]).forEach((cap,ci)=>{
     const rows=[];let ct=0;
     (cap.subcapitulos||[]).forEach(sub=>{
@@ -2445,10 +2457,10 @@ async function buildBudgetPDF(opt){
       });
     });
     if(!rows.length)return;
-    ct=round2(ct);base=round2(base+ct);
+    ct=round2(ct);if(capAparte(cap))aparteP=round2(aparteP+ct);else base=round2(base+ct);
     const capStyle={fontStyle:'bold',fillColor:SLATE,textColor:[255,255,255],fontSize:9,halign:'left'};
     if(med)body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:4,styles:capStyle}]);
-    else body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase(),colSpan:5,styles:capStyle},{content:fmtNum(ct)+' €',styles:{...capStyle,halign:'right'}}]);
+    else body.push([{content:T((ci+1)+'. '+(cap.nombre||'')).toUpperCase()+(capAparte(cap)?' - NO INCLUIDO EN EL TOTAL':''),colSpan:5,styles:capStyle},{content:fmtNum(ct)+' €',styles:{...capStyle,halign:'right'}}]);
     rows.forEach(r=>body.push(r));
   });
   const isHdr=body.map(r=>typeof r[0]==='object');
@@ -2508,6 +2520,16 @@ async function buildBudgetPDF(opt){
   doc.text('TOTAL',bx,y+7.4);doc.text(fmtNum(total)+' €',W-M-1,y+7.4,{align:'right'});
   doc.setFillColor(...ACC);doc.rect(bx-3,y+11,87,0.9,'F');
   y+=19;
+  // avisos: equipamiento aparte y partidas sin medir
+  const sm=contarSinMedir(),avisos=[];
+  if(aparteP>0)avisos.push('Los capítulos marcados "NO INCLUIDO EN EL TOTAL" ('+fmtNum(aparteP)+' € estimados, sin IVA) son equipamiento a cotizar aparte y no suman en la base imponible.');
+  if(sm>0)avisos.push('PRESUPUESTO PRELIMINAR: '+sm+' partida'+(sm>1?'s':'')+' pendiente'+(sm>1?'s':'')+' de medición (cantidad 0). El importe final dependerá de las mediciones reales.');
+  if(avisos.length){
+    doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(...NAVY);
+    const av=[];avisos.forEach(a=>doc.splitTextToSize(a,CW).forEach(x=>av.push(x)));
+    need(av.length*4+4);
+    av.forEach(l=>{doc.text(l,M,y);y+=4});y+=3;
+  }
 
   // ── Condiciones ──
   const cond=['Presupuesto válido durante '+validez+' días desde su fecha.'];
